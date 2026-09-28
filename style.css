@@ -307,3 +307,25 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
   .dt-sidebar-foot { display: none; }
   .dt-main { padding: 20px; }
 }
+
+/* ---------- Kopyalama butonlari ve pencere ---------- */
+.dt-btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.dt-btn-row .dt-add-row-btn { margin-top: 0; }
+.dt-copy-btn { color: var(--ink); }
+.dt-copy-btn:hover { border-color: var(--amber); background: var(--amber-bg); }
+
+.dt-modal-overlay { position: fixed; inset: 0; background: rgba(27,42,74,0.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+.dt-modal { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(27,42,74,0.25); }
+.dt-modal h2 { font-family: 'Source Serif 4', serif; font-size: 20px; margin: 0 0 8px; color: var(--ink); }
+.dt-modal-desc { font-size: 13px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 14px; }
+.dt-modal-all { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; cursor: pointer; }
+.dt-modal-list { border: 1px solid var(--rule); border-radius: 8px; max-height: 240px; overflow-y: auto; }
+.dt-modal-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13.5px; border-bottom: 1px solid var(--rule-soft); cursor: pointer; }
+.dt-modal-item:last-child { border-bottom: none; }
+.dt-modal-item:hover { background: var(--paper-dim); }
+.dt-modal-item small { margin-left: auto; color: var(--ink-soft); font-size: 11.5px; }
+.dt-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.dt-modal-cancel, .dt-modal-ok { padding: 9px 18px; border-radius: 7px; font-size: 13.5px; font-family: inherit; cursor: pointer; }
+.dt-modal-cancel { background: #fff; border: 1px solid var(--rule); color: var(--ink-soft); }
+.dt-modal-ok { background: var(--ink); border: 1px solid var(--ink); color: #fff; font-weight: 600; }
+.dt-modal-ok:hover { background: #26385E; }
