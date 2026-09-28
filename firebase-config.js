@@ -10,12 +10,13 @@
 // ============================================================
 
 const firebaseConfig = {
-  apiKey: "BURAYA_KENDI_API_KEY_DEGERINIZ",
-  authDomain: "BURAYA_KENDI_PROJENIZ.firebaseapp.com",
-  projectId: "BURAYA_KENDI_PROJE_ID_DEGERINIZ",
-  storageBucket: "BURAYA_KENDI_PROJENIZ.appspot.com",
-  messagingSenderId: "BURAYA_KENDI_SENDER_ID_DEGERINIZ",
-  appId: "BURAYA_KENDI_APP_ID_DEGERINIZ",
+  apiKey: "AIzaSyBzfdQIwDAJtTBbFClGGRo0yv2FpeydxwI",
+  authDomain: "notdefteri-e092d.firebaseapp.com",
+  projectId: "notdefteri-e092d",
+  storageBucket: "notdefteri-e092d.firebasestorage.app",
+  messagingSenderId: "950737618605",
+  appId: "1:950737618605:web:390e9d7b83f715779f2824",
+  measurementId: "G-M8LPZ9WGDK"
 };
 
 firebase.initializeApp(firebaseConfig);
