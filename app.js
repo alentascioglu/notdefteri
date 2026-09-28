@@ -233,6 +233,105 @@ function ogrenciSil(subeId, dersId, ogrenciId) {
 }
 
 // ============================================================
+// OGRENCI LISTESINI DIGER DERSLERE KOPYALAMA
+// ============================================================
+
+function satirBosMu(o) {
+  return !o.ad.trim() && GRADE_FIELDS.every((f) => !String(o[f.key] || "").trim());
+}
+
+// Kaynak dersteki ogrenci adlarini hedef derse ekler (notlar kopyalanmaz).
+// Ayni isim hedefte zaten varsa atlanir; bos satirlar once doldurulur.
+function listeyiKopyala(kaynakIsimler, hedefDers) {
+  const mevcut = new Set(hedefDers.ogrenciler.map((o) => o.ad.trim().toLocaleLowerCase("tr-TR")).filter(Boolean));
+  let eklenen = 0;
+  let atlanan = 0;
+  kaynakIsimler.forEach((ad) => {
+    const key = ad.toLocaleLowerCase("tr-TR");
+    if (mevcut.has(key)) { atlanan += 1; return; }
+    const bos = hedefDers.ogrenciler.find(satirBosMu);
+    if (bos) { bos.ad = ad; } else { const yeni = bosOgrenci(); yeni.ad = ad; hedefDers.ogrenciler.push(yeni); }
+    mevcut.add(key);
+    eklenen += 1;
+  });
+  return { eklenen, atlanan };
+}
+
+function kopyaModalKapat() {
+  const eski = document.getElementById("kopya-modal");
+  if (eski) eski.remove();
+}
+
+function kopyaModalAc(subeId, dersId) {
+  const sube = subeBul(subeId);
+  const kaynak = dersBul(sube, dersId);
+  const kaynakIsimler = kaynak.ogrenciler.map((o) => o.ad.trim()).filter(Boolean);
+  const digerleri = sube.dersler.filter((d) => d.id !== dersId);
+
+  if (kaynakIsimler.length === 0) {
+    window.alert("Önce bu derse en az bir öğrenci adı girin.");
+    return;
+  }
+  if (digerleri.length === 0) {
+    window.alert("Bu şubede kopyalanacak başka ders yok. Önce \"Ders Ekle\" ile yeni bir ders oluşturun.");
+    return;
+  }
+
+  kopyaModalKapat();
+  const overlay = document.createElement("div");
+  overlay.id = "kopya-modal";
+  overlay.className = "dt-modal-overlay";
+  overlay.innerHTML = `
+    <div class="dt-modal">
+      <h2>Öğrenci listesini kopyala</h2>
+      <p class="dt-modal-desc">
+        <b>${escapeHtml(sube.ad)}</b> şubesindeki <b>${escapeHtml(kaynak.dersAdi)}</b> dersinin
+        <b>${kaynakIsimler.length}</b> öğrencisi seçtiğiniz derslere eklenecek.
+        Sadece isimler kopyalanır, notlar kopyalanmaz. Hedef derste zaten olan isimler tekrar eklenmez.
+      </p>
+      <label class="dt-modal-all"><input type="checkbox" id="kopya-hepsi" checked /> Tüm dersleri seç</label>
+      <div class="dt-modal-list">
+        ${digerleri.map((d) => `
+          <label class="dt-modal-item">
+            <input type="checkbox" class="js-kopya-hedef" value="${d.id}" checked />
+            <span>${escapeHtml(d.dersAdi || "İsimsiz Ders")}</span>
+            <small>${d.ogrenciler.filter((o) => o.ad.trim()).length} öğrenci var</small>
+          </label>
+        `).join("")}
+      </div>
+      <div class="dt-modal-actions">
+        <button class="dt-modal-cancel" id="kopya-iptal">İptal</button>
+        <button class="dt-modal-ok" id="kopya-onayla">Kopyala</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const kutular = () => Array.from(overlay.querySelectorAll(".js-kopya-hedef"));
+  overlay.querySelector("#kopya-hepsi").addEventListener("change", (e) => {
+    kutular().forEach((k) => (k.checked = e.target.checked));
+  });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) kopyaModalKapat(); });
+  overlay.querySelector("#kopya-iptal").addEventListener("click", kopyaModalKapat);
+  overlay.querySelector("#kopya-onayla").addEventListener("click", () => {
+    const secilenler = kutular().filter((k) => k.checked).map((k) => k.value);
+    if (secilenler.length === 0) { window.alert("En az bir ders seçin."); return; }
+    let toplamEklenen = 0;
+    let toplamAtlanan = 0;
+    secilenler.forEach((id) => {
+      const hedef = dersBul(sube, id);
+      const r = listeyiKopyala(kaynakIsimler, hedef);
+      toplamEklenen += r.eklenen;
+      toplamAtlanan += r.atlanan;
+    });
+    subeyiKirletVeKaydet(subeId);
+    kopyaModalKapat();
+    render();
+    window.alert(`${secilenler.length} derse kopyalandı.\nEklenen kayıt: ${toplamEklenen}\nZaten var olduğu için atlanan: ${toplamAtlanan}`);
+  });
+}
+
+// ============================================================
 // RENDER - GIRIS EKRANI
 // ============================================================
 
@@ -607,7 +706,10 @@ function dersTablosuHtml(sube, ders) {
           </tfoot>
         </table>
       </div>
-      <button class="dt-add-row-btn" data-action="ogr-ekle" data-sube-id="${sube.id}" data-ders-id="${ders.id}">+ Öğrenci Ekle</button>
+      <div class="dt-btn-row">
+        <button class="dt-add-row-btn" data-action="ogr-ekle" data-sube-id="${sube.id}" data-ders-id="${ders.id}">+ Öğrenci Ekle</button>
+        <button class="dt-add-row-btn dt-copy-btn" data-action="kopyala-ac" data-sube-id="${sube.id}" data-ders-id="${ders.id}">⧉ Listeyi diğer derslere kopyala</button>
+      </div>
     </div>
   `;
 }
@@ -646,6 +748,8 @@ function tiklamaDinleyicisiniBagla() {
       dersSil(el.dataset.subeId, el.dataset.dersId);
     } else if (action === "ogr-ekle") {
       ogrenciEkle(el.dataset.subeId, el.dataset.dersId);
+    } else if (action === "kopyala-ac") {
+      kopyaModalAc(el.dataset.subeId, el.dataset.dersId);
     } else if (action === "ogr-sil") {
       ogrenciSil(el.dataset.subeId, el.dataset.dersId, el.dataset.ogrId);
     } else if (action === "sonuc-git") {
