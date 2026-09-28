@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Not Defteri</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+  <div class="dt-loading">
+    <div class="dt-spinner"></div>
+    <span>Yükleniyor...</span>
+  </div>
+</div>
+
+<!-- Firebase SDK (compat surumu, bundler gerektirmez, GitHub Pages'te dogrudan calisir) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+
+<!-- Kendi Firebase proje ayarlariniz -->
+<script src="firebase-config.js"></script>
+
+<!-- Uygulama mantigi -->
+<script src="app.js"></script>
+
+</body>
+</html>
