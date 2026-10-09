@@ -329,3 +329,69 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
 .dt-modal-cancel { background: #fff; border: 1px solid var(--rule); color: var(--ink-soft); }
 .dt-modal-ok { background: var(--ink); border: 1px solid var(--ink); color: #fff; font-weight: 600; }
 .dt-modal-ok:hover { background: #26385E; }
+
+/* ---------- Haftalik ders saati alani ---------- */
+.dt-ders-baslik-flex { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-end; }
+.dt-ders-saati-input {
+  font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 600; color: var(--ink);
+  border: none; border-bottom: 2px solid var(--rule); background: transparent;
+  padding: 2px 0 6px; width: 90px; text-align: left;
+}
+.dt-ders-saati-input:focus { outline: none; border-bottom-color: var(--amber); }
+.dt-ders-saati-aciklama { font-size: 11.5px; color: var(--ink-soft); margin: 6px 0 14px; max-width: 56ch; line-height: 1.5; }
+
+/* ---------- Genel Gorunum basliginda toplu saat girisi ---------- */
+.dt-th-genel-ders { min-width: 92px; }
+.dt-genel-saat-row {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin-top: 5px; font-weight: 400; opacity: 0.85; font-size: 10.5px;
+}
+.dt-genel-saat-row input {
+  width: 34px; text-align: center; border: none; border-radius: 4px;
+  background: rgba(255,255,255,0.15); color: #fff; font-family: inherit;
+  font-size: 11px; padding: 2px 0; -moz-appearance: textfield;
+}
+.dt-genel-saat-row input::-webkit-outer-spin-button,
+.dt-genel-saat-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.dt-genel-saat-row input:focus { outline: 1.5px solid var(--amber); background: rgba(255,255,255,0.9); color: var(--ink); }
+
+
+/* ---------- Okul adi (giris ekrani ve sayfa ustu) ---------- */
+.dt-school-tr { font-family: 'Source Serif 4', serif; font-weight: 700; letter-spacing: 0.04em; color: var(--ink); }
+.dt-school-hy { font-family: 'Noto Serif Armenian', 'Source Serif 4', serif; font-weight: 600; letter-spacing: 0.06em; color: var(--amber); }
+
+.dt-login-card { max-width: 420px; }
+.dt-login-school { text-align: center; margin-bottom: 8px; }
+.dt-login-school .dt-school-tr { font-size: 17px; line-height: 1.35; margin-top: 14px; }
+.dt-login-school .dt-school-hy { font-size: 14px; margin: 6px 0 14px; }
+.dt-login-rule { height: 2px; width: 56px; margin: 0 auto; background: var(--amber); border-radius: 2px; }
+.dt-login-app { margin-top: 14px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+
+.dt-school-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--rule); border-left: 4px solid var(--amber);
+  border-radius: 8px; padding: 12px 18px; margin-bottom: 24px;
+}
+.dt-school-banner .dt-school-tr { font-size: 14.5px; }
+.dt-school-banner .dt-school-hy { font-size: 12.5px; margin-top: 3px; }
+.dt-school-app { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+
+@media (max-width: 720px) {
+  .dt-school-banner { padding: 10px 14px; margin-bottom: 18px; }
+  .dt-school-banner .dt-school-tr { font-size: 12.5px; }
+  .dt-school-banner .dt-school-hy { font-size: 11.5px; }
+  .dt-school-app { display: none; }
+}
+
+/* Baslik hucrelerinde renk grubu arka planlari (".dt-table th" kuralini gecersiz kilar) */
+.dt-table th.dt-group-yazili { background: var(--yazili); color: var(--ink); }
+.dt-table th.dt-group-sozlu { background: var(--sozlu); color: var(--ink); }
+.dt-table th.dt-group-performans { background: var(--performans); color: var(--ink); }
+.dt-table th.dt-group-ortalama { background: var(--amber-bg); color: var(--ink); }
+
+
+/* Ermenice ad ustte, Turkce ad altta */
+.dt-login-school .dt-school-hy { font-size: 15px; margin: 14px 0 6px; }
+.dt-login-school .dt-school-tr { font-size: 17px; line-height: 1.35; margin: 0 0 14px; }
+.dt-school-banner .dt-school-hy { font-size: 13px; margin-top: 0; }
+.dt-school-banner .dt-school-tr { font-size: 14.5px; margin-top: 3px; }
