@@ -43,6 +43,20 @@ const GRADE_FIELDS = [
 
 const GENEL_GORUNUM = "__genel__";
 
+const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
+const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
+
+function okulBannerHtml() {
+  return `
+    <div class="dt-school-banner">
+      <div class="dt-school-names">
+        <div class="dt-school-hy" lang="hy">${OKUL_ADI_HY}</div>
+        <div class="dt-school-tr">${OKUL_ADI_TR}</div>
+      </div>
+      <div class="dt-school-app">Not Defteri</div>
+    </div>`;
+}
+
 let idSayaci = 1;
 function idUret(prefix) {
   idSayaci += 1;
@@ -54,7 +68,17 @@ function bosOgrenci() {
 }
 
 function bosDers(ad) {
-  return { id: idUret("ders"), dersAdi: ad || "Yeni Ders", ogrenciler: [bosOgrenci(), bosOgrenci(), bosOgrenci()] };
+  return { id: idUret("ders"), dersAdi: ad || "Yeni Ders", dersSaati: 1, ogrenciler: [bosOgrenci(), bosOgrenci(), bosOgrenci()] };
+}
+
+// Agirlikli ortalama: [{ortalama, saat}] listesinden, sadece ortalama!=null olanlari kullanarak hesaplar.
+function agirlikliOrtalamaHesapla(liste) {
+  const dolular = liste.filter((x) => x.ortalama !== null && x.ortalama !== undefined);
+  if (dolular.length === 0) return null;
+  const toplamSaat = dolular.reduce((a, x) => a + (x.saat || 1), 0);
+  if (toplamSaat === 0) return null;
+  const toplamPuan = dolular.reduce((a, x) => a + x.ortalama * (x.saat || 1), 0);
+  return toplamPuan / toplamSaat;
 }
 
 function ortalamaHesapla(ogrenci) {
@@ -109,6 +133,7 @@ function varsayilanSubeVerisi(subeId, ornekliMi) {
   const veri = { ad: meta.ad, sinifDuzeyi: meta.sinifDuzeyi, dersler: [] };
   if (ornekliMi) {
     const ornekDers = bosDers("Matematik");
+    ornekDers.dersSaati = 4;
     ornekDers.ogrenciler = [
       { id: idUret("ogr"), ad: "Ayşe Yılmaz", y1: "88", y2: "92", y3: "79", s1: "85", s2: "90", p1: "", p2: "" },
       { id: idUret("ogr"), ad: "Mehmet Demir", y1: "70", y2: "", y3: "", s1: "65", s2: "", p1: "", p2: "" },
@@ -130,7 +155,8 @@ async function verileriYukle() {
     const meta = SUBE_SIRALI_LISTE[idx];
     if (doc.exists) {
       const veri = doc.data();
-      subeler.push({ id: meta.id, ad: veri.ad || meta.ad, sinifDuzeyi: veri.sinifDuzeyi || meta.sinifDuzeyi, dersler: veri.dersler || [] });
+      const dersler = (veri.dersler || []).map((d) => ({ dersSaati: 1, ...d }));
+      subeler.push({ id: meta.id, ad: veri.ad || meta.ad, sinifDuzeyi: veri.sinifDuzeyi || meta.sinifDuzeyi, dersler });
     } else {
       const varsayilan = varsayilanSubeVerisi(meta.id, idx === 0);
       subeler.push({ id: meta.id, ...varsayilan });
@@ -340,7 +366,13 @@ function renderLogin(hataMesaji) {
   app.innerHTML = `
     <div class="dt-login-wrap">
       <div class="dt-login-card">
-        <div class="dt-login-brand">🎓 Not Defteri</div>
+        <div class="dt-login-school">
+          <div class="dt-login-rule"></div>
+          <div class="dt-school-hy" lang="hy">${OKUL_ADI_HY}</div>
+          <div class="dt-school-tr">${OKUL_ADI_TR}</div>
+          <div class="dt-login-rule"></div>
+          <div class="dt-login-app">Not Defteri</div>
+        </div>
         <form id="login-form">
           <label for="login-email">E-posta</label>
           <input type="email" id="login-email" required autocomplete="username" />
@@ -445,11 +477,11 @@ function guncelleKayitDurumu() {
 function renderMain() {
   const main = document.getElementById("main");
   if (state.aktifSayfa === "ana") {
-    main.innerHTML = anaSayfaHtml();
+    main.innerHTML = okulBannerHtml() + anaSayfaHtml();
     anaSayfaSonuclariGuncelle();
   } else {
     const sube = subeBul(state.aktifSayfa);
-    main.innerHTML = subeSayfaHtml(sube);
+    main.innerHTML = okulBannerHtml() + subeSayfaHtml(sube);
   }
 }
 
@@ -484,6 +516,7 @@ function aramaSonucHesapla() {
           subeAdi: sube.ad,
           dersId: ders.id,
           dersAdi: ders.dersAdi,
+          saat: ders.dersSaati || 1,
           ortalama: ortalamaHesapla(ogrenci),
         });
       }
@@ -501,8 +534,7 @@ function anaSayfaSonuclariGuncelle() {
   const sonuclar = aramaSonucHesapla();
   const farkliSube = new Set(sonuclar.map((r) => r.subeId)).size;
 
-  const genelDegerler = sonuclar.filter((r) => r.ortalama !== null).map((r) => r.ortalama);
-  const genelOrtalama = genelDegerler.length > 0 ? genelDegerler.reduce((a, b) => a + b, 0) / genelDegerler.length : null;
+  const genelOrtalama = agirlikliOrtalamaHesapla(sonuclar.map((r) => ({ ortalama: r.ortalama, saat: r.saat })));
 
   let html = "";
   if (farkliSube > 1) {
@@ -527,12 +559,13 @@ function anaSayfaSonuclariGuncelle() {
   } else {
     html += `
       <table class="dt-table">
-        <thead><tr><th>Şube</th><th>Ders</th><th>Ortalama</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Şube</th><th>Ders</th><th>Saat</th><th>Ortalama</th><th>Durum</th></tr></thead>
         <tbody>
           ${sonuclar.map((s) => `
             <tr class="dt-row-clickable" data-action="sonuc-git" data-sube-id="${s.subeId}" data-ders-id="${s.dersId}">
               <td>${escapeHtml(s.subeAdi)}</td>
               <td>${escapeHtml(s.dersAdi)}</td>
+              <td class="dt-num">${s.saat}</td>
               <td class="dt-num">${s.ortalama !== null ? fmt(s.ortalama) : "—"}</td>
               <td>${
                 s.ortalama === null
@@ -589,12 +622,8 @@ function subeSayfaHtml(sube) {
   `;
 }
 
-function subeGenelGorunumHtml(sube) {
+function subeGenelSatirlariHesapla(sube) {
   const dersler = sube.dersler;
-  if (dersler.length === 0) {
-    return `<div class="dt-empty">Bu şubede henüz ders yok. Öğrencileri toplu görebilmek için önce "Ders Ekle" ile en az bir ders oluşturup içine öğrenci girmeniz gerekir.</div>`;
-  }
-
   const isimMap = new Map();
   dersler.forEach((d) => {
     d.ogrenciler.forEach((o) => {
@@ -605,21 +634,31 @@ function subeGenelGorunumHtml(sube) {
     });
   });
 
-  if (isimMap.size === 0) {
-    return `<div class="dt-empty">Bu şubedeki derslere henüz öğrenci eklenmemiş. Bir derse girip "Öğrenci Ekle" ile başlayabilirsiniz.</div>`;
-  }
-
   const satirlar = Array.from(isimMap.entries()).map(([key, ad]) => {
     const dersOrtalamalari = {};
     dersler.forEach((d) => {
       const ogrenci = d.ogrenciler.find((o) => o.ad.trim().toLocaleLowerCase("tr-TR") === key);
       dersOrtalamalari[d.id] = ogrenci ? ortalamaHesapla(ogrenci) : null;
     });
-    const dolular = Object.values(dersOrtalamalari).filter((v) => v !== null);
-    const genelOrtalama = dolular.length > 0 ? dolular.reduce((a, b) => a + b, 0) / dolular.length : null;
+    const agirlikliListe = dersler.map((d) => ({ ortalama: dersOrtalamalari[d.id], saat: d.dersSaati || 1 }));
+    const genelOrtalama = agirlikliOrtalamaHesapla(agirlikliListe);
     return { ad, dersOrtalamalari, genelOrtalama };
   });
   satirlar.sort((a, b) => a.ad.localeCompare(b.ad, "tr-TR"));
+  return satirlar;
+}
+
+function subeGenelGorunumHtml(sube) {
+  const dersler = sube.dersler;
+  if (dersler.length === 0) {
+    return `<div class="dt-empty">Bu şubede henüz ders yok. Öğrencileri toplu görebilmek için önce "Ders Ekle" ile en az bir ders oluşturup içine öğrenci girmeniz gerekir.</div>`;
+  }
+
+  const satirlar = subeGenelSatirlariHesapla(sube);
+
+  if (satirlar.length === 0) {
+    return `<div class="dt-empty">Bu şubedeki derslere henüz öğrenci eklenmemiş. Bir derse girip "Öğrenci Ekle" ile başlayabilirsiniz.</div>`;
+  }
 
   return `
     <div class="dt-table-wrap">
@@ -627,7 +666,14 @@ function subeGenelGorunumHtml(sube) {
         <thead>
           <tr>
             <th class="dt-th-sticky">Öğrenci Adı Soyadı</th>
-            ${dersler.map((d) => `<th class="dt-th-clickable" data-action="ders-sec" data-sube-id="${sube.id}" data-ders-id="${d.id}">${escapeHtml(d.dersAdi || "İsimsiz Ders")}</th>`).join("")}
+            ${dersler.map((d) => `
+              <th class="dt-th-genel-ders">
+                <span class="dt-th-clickable" data-action="ders-sec" data-sube-id="${sube.id}" data-ders-id="${d.id}">${escapeHtml(d.dersAdi || "İsimsiz Ders")}</span>
+                <div class="dt-genel-saat-row">
+                  <input type="number" min="1" max="20" class="js-genel-saat-input" data-sube-id="${sube.id}" data-ders-id="${d.id}" value="${d.dersSaati || 1}" />
+                  <span>sa/hf</span>
+                </div>
+              </th>`).join("")}
             <th class="dt-group-ortalama">Genel Ortalama</th>
           </tr>
         </thead>
@@ -652,10 +698,17 @@ function dersTablosuHtml(sube, ders) {
 
   return `
     <div>
-      <div class="dt-ders-baslik-row">
-        <label class="dt-ders-adi-label">Ders Adı</label>
-        <input class="dt-ders-adi-input" id="ders-adi-input" data-sube-id="${sube.id}" data-ders-id="${ders.id}" value="${escapeHtml(ders.dersAdi)}" />
+      <div class="dt-ders-baslik-row dt-ders-baslik-flex">
+        <div>
+          <label class="dt-ders-adi-label">Ders Adı</label>
+          <input class="dt-ders-adi-input" id="ders-adi-input" data-sube-id="${sube.id}" data-ders-id="${ders.id}" value="${escapeHtml(ders.dersAdi)}" />
+        </div>
+        <div>
+          <label class="dt-ders-adi-label">Haftalık Ders Saati</label>
+          <input type="number" min="1" max="20" class="dt-ders-saati-input" id="ders-saati-input" data-sube-id="${sube.id}" data-ders-id="${ders.id}" value="${ders.dersSaati || 1}" />
+        </div>
       </div>
+      <p class="dt-ders-saati-aciklama">Bu değer, öğrencinin genel ortalaması hesaplanırken bu dersin ne kadar ağırlıklı sayılacağını belirler (örn. 6 saatlik bir ders, 1 saatlik bir derse göre genel ortalamaya çok daha fazla etki eder).</p>
       <div class="dt-table-wrap">
         <table class="dt-table dt-table-editable">
           <thead>
@@ -790,6 +843,40 @@ function eventleriBaglaMain() {
       ders.dersAdi = e.target.value;
       const pillLabel = document.querySelector(`.js-pill-label[data-ders-id="${dersId}"]`);
       if (pillLabel) pillLabel.textContent = "📘 " + (e.target.value || "İsimsiz Ders");
+      subeyiKirletVeKaydet(subeId);
+    });
+  }
+
+  // Genel Gorunum: ders basliklarindaki toplu saat girisleri
+  main.querySelectorAll(".js-genel-saat-input").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const { subeId, dersId } = e.target.dataset;
+      const sube = subeBul(subeId);
+      const ders = dersBul(sube, dersId);
+      const deger = parseInt(e.target.value, 10);
+      ders.dersSaati = Number.isNaN(deger) || deger < 1 ? 1 : deger;
+
+      const satirlar = subeGenelSatirlariHesapla(sube);
+      const satirElemanlari = main.querySelectorAll(".dt-table-genel tbody tr");
+      satirlar.forEach((satir, idx) => {
+        const hucre = satirElemanlari[idx] && satirElemanlari[idx].querySelector(".dt-group-ortalama");
+        if (hucre) hucre.textContent = satir.genelOrtalama !== null ? fmt(satir.genelOrtalama) : "—";
+      });
+
+      subeyiKirletVeKaydet(subeId);
+    });
+  });
+
+  // Haftalik ders saati input
+  const dersSaatiInput = document.getElementById("ders-saati-input");
+  if (dersSaatiInput) {
+    dersSaatiInput.addEventListener("input", (e) => {
+      const subeId = e.target.dataset.subeId;
+      const dersId = e.target.dataset.dersId;
+      const sube = subeBul(subeId);
+      const ders = dersBul(sube, dersId);
+      const deger = parseInt(e.target.value, 10);
+      ders.dersSaati = Number.isNaN(deger) || deger < 1 ? 1 : deger;
       subeyiKirletVeKaydet(subeId);
     });
   }

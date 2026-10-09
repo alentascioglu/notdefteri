@@ -72,3 +72,35 @@ Başka hiçbir şey değişmez, veriler aynı kalır.
 | Giriş yapılıyor ama "Veriler yüklenemedi" | Firestore kuralları yayınlanmamış veya kuraldaki e-posta yanlış. |
 | "E-posta veya şifre hatalı (auth/unauthorized-domain)" | Alan adı Yetkili alan adları listesine eklenmemiş. |
 | Sayfa güncellenmiyor | Tarayıcıda Ctrl+F5 ile yenileyin. |
+
+---
+
+## Öğrenci listesini diğer derslere kopyalama
+
+1. Bir şubede ilk derse öğrencileri girin.
+2. Aynı şubede "Ders Ekle" ile diğer dersleri oluşturun.
+3. İlk dersin sayfasında **"Listeyi diğer derslere kopyala"** butonuna basın.
+4. Açılan pencerede hangi derslere kopyalanacağını işaretleyin (varsayılan hepsi) ve **Kopyala**'ya basın.
+
+- Sadece öğrenci adları kopyalanır, notlar kopyalanmaz.
+- Hedef derste aynı isim zaten varsa tekrar eklenmez.
+- Kopyalama sadece o şubenin dersleri arasında çalışır, başka şubeler etkilenmez.
+
+
+---
+
+## Ağırlıklı ortalama (haftalık ders saati)
+
+Genel ortalama artık derslerin haftalık saatine göre ağırlıklı hesaplanıyor:
+
+- Her dersin sayfasında, "Ders Adı"nın yanında **"Haftalık Ders Saati"** alanı var. Varsayılan değer 1'dir, dersin gerçek haftalık saatine göre güncelleyin (örn. Matematik 6, Müzik 1).
+- Bir öğrencinin **genel ortalaması** (Ana Sayfa aramasında ve Şube → Genel Görünüm'de), sadece notu girilmiş derslerin, o dersin haftalık saatiyle ağırlıklandırılmış ortalamasıdır:
+
+  `Genel Ortalama = Σ(ders ortalaması × haftalık saat) / Σ(haftalık saat)`
+
+  (sadece notu olan dersler toplama dahil edilir)
+
+- Bir dersin **kendi içindeki** ortalaması (yazılı/sözlü/performans notlarının ortalaması) değişmedi, hâlâ basit aritmetik ortalamadır.
+- Şube Genel Görünüm tablosunda her ders başlığının altında o dersin haftalık saati küçük yazıyla görünür, böylece ağırlıklar şeffaf kalır.
+- **Önceden girdiğiniz dersler** otomatik olarak 1 saatlik kabul edilir; doğru genel ortalama için her dersin saatini girmeniz gerekir.
+- Her dersi tek tek açmak zorunda değilsiniz: bir şubenin **Genel Görünüm** sayfasında, her ders başlığının altında küçük bir saat kutusu var. Bir şubenin tüm derslerinin saatini bu tek ekrandan, hızlıca girebilirsiniz.
