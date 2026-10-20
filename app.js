@@ -110,6 +110,8 @@ const state = {
   aktifSayfa: "ana",     // 'ana' | subeId
   aktifDersId: null,
   aramaAdi: "",
+  oneriAcik: false,
+  oneriIndex: -1,
   kayitDurumu: "idle",   // idle | saving | saved | error
 };
 
@@ -494,22 +496,102 @@ function anaSayfaHtml() {
         <h1>Öğrenci Ara</h1>
         <p>Bir öğrencinin adını yazın; kayıtlı olduğu tüm şube ve derslerdeki notları ile genel ortalaması otomatik listelenir.</p>
       </header>
-      <div class="dt-search">
-        <span>🔍</span>
-        <input type="text" id="arama-input" placeholder="Öğrenci adı soyadı yazın..." value="${escapeHtml(state.aramaAdi)}" autofocus />
+      <div class="dt-search-wrap">
+        <div class="dt-search">
+          <span>🔍</span>
+          <input type="text" id="arama-input" placeholder="Öğrenci adının bir kısmını yazın..." value="${escapeHtml(state.aramaAdi)}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="oneri-kutusu" autofocus />
+        </div>
+        <div id="oneri-kutusu" class="dt-oneri-list" role="listbox" hidden></div>
       </div>
       <div id="ana-sonuclar"></div>
     </div>
   `;
 }
 
+// Buyuk/kucuk harf ve Turkce karakter farkini yok sayar: "Ayşe" ile "ayse" ayni sayilir.
+function aramaNormallestir(str) {
+  return String(str == null ? "" : str)
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ").trim();
+}
+
+// Yazilan metni iceren ogrenci adlarini (tekrarsiz) sube bilgisiyle listeler.
+function oneriListesiHesapla(metin) {
+  const nq = aramaNormallestir(metin);
+  if (!nq || !state.subeler) return [];
+  const parcalar = nq.split(" ").filter(Boolean);
+  const harita = new Map();
+  state.subeler.forEach((sube) => {
+    sube.dersler.forEach((ders) => {
+      ders.ogrenciler.forEach((o) => {
+        const ad = o.ad.trim();
+        if (!ad) return;
+        const key = aramaNormallestir(ad);
+        if (!parcalar.every((p) => key.includes(p))) return;
+        if (!harita.has(key)) harita.set(key, { ad, key, subeler: new Set(), dersSayisi: 0 });
+        const kayit = harita.get(key);
+        kayit.subeler.add(sube.ad);
+        kayit.dersSayisi += 1;
+      });
+    });
+  });
+  const puan = (k) => (k.key.startsWith(nq) ? 0 : k.key.split(" ").some((w) => w.startsWith(parcalar[0])) ? 1 : 2);
+  return Array.from(harita.values()).sort((a, b) => puan(a) - puan(b) || a.ad.localeCompare(b.ad, "tr-TR"));
+}
+
+const ONERI_LIMIT = 8;
+
+function oneriGuncelle() {
+  const kutu = document.getElementById("oneri-kutusu");
+  const input = document.getElementById("arama-input");
+  if (!kutu || !input) return;
+  const oneriler = oneriListesiHesapla(state.aramaAdi);
+  const nq = aramaNormallestir(state.aramaAdi);
+  // Zaten tam secilmis tek bir isim varsa listeyi gostermeye gerek yok
+  const tekTam = oneriler.length === 1 && oneriler[0].key === nq;
+  const goster = state.oneriAcik && oneriler.length > 0 && !tekTam;
+
+  if (!goster) {
+    kutu.hidden = true;
+    kutu.innerHTML = "";
+    input.setAttribute("aria-expanded", "false");
+    return;
+  }
+  const gorunen = oneriler.slice(0, ONERI_LIMIT);
+  if (state.oneriIndex >= gorunen.length) state.oneriIndex = gorunen.length - 1;
+  kutu.innerHTML =
+    gorunen.map((o, i) => `
+      <div class="dt-oneri-item ${i === state.oneriIndex ? "dt-oneri-aktif" : ""}" role="option" data-action="oneri-sec" data-ad="${escapeHtml(o.ad)}">
+        <span class="dt-oneri-ad">${escapeHtml(o.ad)}</span>
+        <span class="dt-oneri-sube">${Array.from(o.subeler).map(escapeHtml).join(", ")}</span>
+      </div>`).join("") +
+    (oneriler.length > ONERI_LIMIT
+      ? `<div class="dt-oneri-daha">+${oneriler.length - ONERI_LIMIT} öğrenci daha var, listeyi daraltmak için yazmaya devam edin</div>`
+      : "");
+  kutu.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+}
+
+function oneriSec(ad) {
+  state.aramaAdi = ad;
+  state.oneriAcik = false;
+  state.oneriIndex = -1;
+  const input = document.getElementById("arama-input");
+  if (input) { input.value = ad; input.focus(); }
+  oneriGuncelle();
+  anaSayfaSonuclariGuncelle();
+}
+
 function aramaSonucHesapla() {
-  const q = state.aramaAdi.trim().toLocaleLowerCase("tr-TR");
+  const q = aramaNormallestir(state.aramaAdi);
   if (!q) return [];
   const sonuclar = [];
   state.subeler.forEach((sube) => {
     sube.dersler.forEach((ders) => {
-      const ogrenci = ders.ogrenciler.find((o) => o.ad.trim().toLocaleLowerCase("tr-TR") === q);
+      const ogrenci = ders.ogrenciler.find((o) => aramaNormallestir(o.ad) === q);
       if (ogrenci) {
         sonuclar.push({
           subeId: sube.id,
@@ -532,6 +614,16 @@ function anaSayfaSonuclariGuncelle() {
   if (!aramaYapildi) { kapsayici.innerHTML = ""; return; }
 
   const sonuclar = aramaSonucHesapla();
+
+  // Henuz tam bir ogrenci secilmediyse ozet kutularini gostermeden sadece yonlendir
+  if (sonuclar.length === 0) {
+    const adaylar = oneriListesiHesapla(state.aramaAdi).length;
+    kapsayici.innerHTML = adaylar > 0
+      ? `<div class="dt-empty">${adaylar} öğrenci eşleşti. Notlarını görmek için yukarıdaki listeden birini seçin.</div>`
+      : `<div class="dt-empty">Bu yazıyla eşleşen bir öğrenci bulunamadı. Yazımı kontrol edin ya da adın başka bir bölümünü deneyin.</div>`;
+    return;
+  }
+
   const farkliSube = new Set(sonuclar.map((r) => r.subeId)).size;
 
   const genelOrtalama = agirlikliOrtalamaHesapla(sonuclar.map((r) => ({ ortalama: r.ortalama, saat: r.saat })));
@@ -554,9 +646,7 @@ function anaSayfaSonuclariGuncelle() {
     </div>
   `;
 
-  if (sonuclar.length === 0) {
-    html += `<div class="dt-empty">Bu isimde kayıtlı bir öğrenci bulunamadı. Ders sayfalarındaki yazımla birebir aynı olduğundan emin olun.</div>`;
-  } else {
+  {
     html += `
       <table class="dt-table">
         <thead><tr><th>Şube</th><th>Ders</th><th>Saat</th><th>Ortalama</th><th>Durum</th></tr></thead>
@@ -774,6 +864,15 @@ function dersTablosuHtml(sube, ders) {
 function tiklamaDinleyicisiniBagla() {
   const app = document.getElementById("app");
 
+  // Arama kutusu disina tiklaninca oneri listesini kapat
+  document.addEventListener("click", (e) => {
+    if (state.oneriAcik && !e.target.closest(".dt-search-wrap")) {
+      state.oneriAcik = false;
+      state.oneriIndex = -1;
+      oneriGuncelle();
+    }
+  });
+
   app.addEventListener("click", (e) => {
     const el = e.target.closest("[data-action]");
     if (!el) return;
@@ -801,6 +900,8 @@ function tiklamaDinleyicisiniBagla() {
       dersSil(el.dataset.subeId, el.dataset.dersId);
     } else if (action === "ogr-ekle") {
       ogrenciEkle(el.dataset.subeId, el.dataset.dersId);
+    } else if (action === "oneri-sec") {
+      oneriSec(el.dataset.ad);
     } else if (action === "kopyala-ac") {
       kopyaModalAc(el.dataset.subeId, el.dataset.dersId);
     } else if (action === "ogr-sil") {
@@ -827,8 +928,34 @@ function eventleriBaglaMain() {
   if (aramaInput) {
     aramaInput.addEventListener("input", (e) => {
       state.aramaAdi = e.target.value;
+      state.oneriAcik = true;
+      state.oneriIndex = -1;
+      oneriGuncelle();
       anaSayfaSonuclariGuncelle();
       // sonuc satirlarina tiklama olay delegasyonu app seviyesinde zaten calisiyor
+    });
+    aramaInput.addEventListener("focus", () => {
+      if (state.aramaAdi.trim()) { state.oneriAcik = true; oneriGuncelle(); }
+    });
+    aramaInput.addEventListener("keydown", (e) => {
+      const oneriler = oneriListesiHesapla(state.aramaAdi).slice(0, ONERI_LIMIT);
+      const acik = !document.getElementById("oneri-kutusu").hidden;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (oneriler.length === 0) return;
+        e.preventDefault();
+        state.oneriAcik = true;
+        const yon = e.key === "ArrowDown" ? 1 : -1;
+        state.oneriIndex = (state.oneriIndex + yon + oneriler.length) % oneriler.length;
+        oneriGuncelle();
+      } else if (e.key === "Enter") {
+        if (!acik || oneriler.length === 0) return;
+        e.preventDefault();
+        oneriSec(oneriler[state.oneriIndex >= 0 ? state.oneriIndex : 0].ad);
+      } else if (e.key === "Escape") {
+        state.oneriAcik = false;
+        state.oneriIndex = -1;
+        oneriGuncelle();
+      }
     });
   }
 
