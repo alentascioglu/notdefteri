@@ -415,3 +415,18 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
 .dt-oneri-ad { color: var(--ink); font-weight: 500; }
 .dt-oneri-sube { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
 .dt-oneri-daha { padding: 8px 16px; font-size: 11.5px; color: var(--ink-soft); background: var(--paper-dim); border-top: 1px solid var(--rule-soft); }
+
+.dt-surum { margin-top: 40px; font-size: 11px; color: var(--ink-soft); opacity: 0.7; }
+
+
+/* ---------- Okul logosu ---------- */
+.dt-login-logo { display: block; height: 92px; width: auto; margin: 0 auto 16px; }
+.dt-school-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.dt-school-logo { height: 46px; width: auto; flex-shrink: 0; }
+.dt-brand-logo { height: 26px; width: auto; flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .dt-login-logo { height: 76px; }
+  .dt-school-logo { height: 38px; }
+  .dt-school-id { gap: 10px; }
+}

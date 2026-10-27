@@ -42,6 +42,7 @@ const GRADE_FIELDS = [
 ];
 
 const GENEL_GORUNUM = "__genel__";
+const SURUM = "21 Ekim 2026 · logo";
 
 const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
 const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
@@ -49,9 +50,12 @@ const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
 function okulBannerHtml() {
   return `
     <div class="dt-school-banner">
-      <div class="dt-school-names">
-        <div class="dt-school-hy" lang="hy">${OKUL_ADI_HY}</div>
-        <div class="dt-school-tr">${OKUL_ADI_TR}</div>
+      <div class="dt-school-id">
+        <img class="dt-school-logo" src="logo-koyu.png" alt="Okul logosu" onerror="this.style.display='none'" />
+        <div class="dt-school-names">
+          <div class="dt-school-hy" lang="hy">${OKUL_ADI_HY}</div>
+          <div class="dt-school-tr">${OKUL_ADI_TR}</div>
+        </div>
       </div>
       <div class="dt-school-app">Not Defteri</div>
     </div>`;
@@ -369,6 +373,7 @@ function renderLogin(hataMesaji) {
     <div class="dt-login-wrap">
       <div class="dt-login-card">
         <div class="dt-login-school">
+          <img class="dt-login-logo" src="logo-koyu.png" alt="Okul logosu" onerror="this.style.display='none'" />
           <div class="dt-login-rule"></div>
           <div class="dt-school-hy" lang="hy">${OKUL_ADI_HY}</div>
           <div class="dt-school-tr">${OKUL_ADI_TR}</div>
@@ -420,7 +425,7 @@ function render() {
   const app = document.getElementById("app");
   app.innerHTML = `
     <aside class="dt-sidebar">
-      <div class="dt-brand">🎓 Not Defteri</div>
+      <div class="dt-brand"><img class="dt-brand-logo" src="logo-acik.png" alt="" onerror="this.style.display='none'" /><span>Not Defteri</span></div>
       <nav class="dt-nav">
         <button class="dt-nav-item ${state.aktifSayfa === "ana" ? "dt-active" : ""}" data-action="nav-ana">
           <span>🔍 Ana Sayfa</span>
@@ -504,6 +509,7 @@ function anaSayfaHtml() {
         <div id="oneri-kutusu" class="dt-oneri-list" role="listbox" hidden></div>
       </div>
       <div id="ana-sonuclar"></div>
+      <div class="dt-surum">Sürüm: ${SURUM}</div>
     </div>
   `;
 }
