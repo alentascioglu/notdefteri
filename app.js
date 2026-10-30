@@ -42,7 +42,8 @@ const GRADE_FIELDS = [
 ];
 
 const GENEL_GORUNUM = "__genel__";
-const SURUM = "21 Ekim 2026 · logo";
+const YIL_SONU = "__yilsonu__";
+const SURUM = "30 Ekim 2026 · dönemler";
 
 const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
 const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
@@ -85,10 +86,51 @@ function agirlikliOrtalamaHesapla(liste) {
   return toplamPuan / toplamSaat;
 }
 
-function ortalamaHesapla(ogrenci) {
-  const degerler = GRADE_FIELDS.map((f) => parseFloat(ogrenci[f.key])).filter((v) => !Number.isNaN(v));
+// Dönem 1 notları öğrencinin üst düzey alanlarında (eski veriyle uyumlu), Dönem 2 notları ogr.d2 içinde durur.
+function notAl(ogrenci, key, donem) {
+  const kaynak = donem === 2 ? (ogrenci.d2 || {}) : ogrenci;
+  const v = kaynak[key];
+  return v === undefined || v === null ? "" : v;
+}
+
+function notYaz(ogrenci, key, deger, donem) {
+  if (donem === 2) {
+    if (!ogrenci.d2) ogrenci.d2 = {};
+    ogrenci.d2[key] = deger;
+  } else {
+    ogrenci[key] = deger;
+  }
+}
+
+function donemOrtalamasi(ogrenci, donem) {
+  const degerler = GRADE_FIELDS.map((f) => parseFloat(notAl(ogrenci, f.key, donem))).filter((v) => !Number.isNaN(v));
   if (degerler.length === 0) return null;
   return degerler.reduce((a, b) => a + b, 0) / degerler.length;
+}
+
+// Ekranda seçili dönemin ortalaması (tek argüman: .map(ortalamaHesapla) ile güvenle kullanılır)
+function ortalamaHesapla(ogrenci) {
+  return donemOrtalamasi(ogrenci, state.donem);
+}
+
+// Yıl sonu: iki dönemin ortalaması; yalnızca biri varsa o dönem yıl sonu sayılır.
+function yilSonuOrtalamasi(ogrenci) {
+  const liste = [donemOrtalamasi(ogrenci, 1), donemOrtalamasi(ogrenci, 2)].filter((v) => v !== null);
+  return liste.length === 0 ? null : liste.reduce((a, b) => a + b, 0) / liste.length;
+}
+
+// Zayıf ders sayısına göre sınıf durumu
+function sinifDurumuHesapla(zayifSayisi, veriVar) {
+  if (!veriVar) return null;
+  if (zayifSayisi === 0) return "gecti";
+  return zayifSayisi <= state.ayarlar.sorumluLimit ? "sorumlu" : "kaldi";
+}
+
+function durumRozetiHtml(durum) {
+  if (durum === "gecti") return `<span class="dt-badge dt-badge-ok">Geçti</span>`;
+  if (durum === "sorumlu") return `<span class="dt-badge dt-badge-warn">Sorumlu</span>`;
+  if (durum === "kaldi") return `<span class="dt-badge dt-badge-bad">Kaldı</span>`;
+  return `<span class="dt-badge dt-badge-muted">—</span>`;
 }
 
 function fmt(n) {
@@ -113,6 +155,8 @@ const state = {
   subeler: null,        // slug -> {id, ad, sinifDuzeyi, dersler:[...]}
   aktifSayfa: "ana",     // 'ana' | subeId
   aktifDersId: null,
+  donem: 1,              // 1 | 2 (sube sayfalarinda secili donem)
+  ayarlar: { sorumluLimit: 3 },
   aramaAdi: "",
   oneriAcik: false,
   oneriIndex: -1,
@@ -175,9 +219,32 @@ async function verileriYukle() {
   }
 
   state.subeler = subeler;
+
+  try {
+    const ay = await db.collection("ayarlar").doc("genel").get();
+    if (ay.exists) {
+      const lim = parseInt(ay.data().sorumluLimit, 10);
+      if (!Number.isNaN(lim) && lim >= 0) state.ayarlar.sorumluLimit = lim;
+    }
+  } catch (e) {
+    console.warn("Ayarlar okunamadi, varsayilan kullaniliyor:", e);
+  }
+}
+
+let ayarTimer = null;
+function ayarlariKaydet() {
+  if (ayarTimer) clearTimeout(ayarTimer);
+  ayarTimer = setTimeout(async () => {
+    try {
+      await db.collection("ayarlar").doc("genel").set({ sorumluLimit: state.ayarlar.sorumluLimit });
+    } catch (e) {
+      console.error("Ayar kayit hatasi:", e);
+    }
+  }, 600);
 }
 
 function subeyiKirletVeKaydet(subeId) {
+  subeOzetGuncelle();
   kirliSubeler.add(subeId);
   state.kayitDurumu = "saving";
   guncelleKayitDurumu();
@@ -269,7 +336,7 @@ function ogrenciSil(subeId, dersId, ogrenciId) {
 // ============================================================
 
 function satirBosMu(o) {
-  return !o.ad.trim() && GRADE_FIELDS.every((f) => !String(o[f.key] || "").trim());
+  return !o.ad.trim() && GRADE_FIELDS.every((f) => !String(o[f.key] || "").trim() && !String((o.d2 || {})[f.key] || "").trim());
 }
 
 // Kaynak dersteki ogrenci adlarini hedef derse ekler (notlar kopyalanmaz).
@@ -605,7 +672,9 @@ function aramaSonucHesapla() {
           dersId: ders.id,
           dersAdi: ders.dersAdi,
           saat: ders.dersSaati || 1,
-          ortalama: ortalamaHesapla(ogrenci),
+          d1: donemOrtalamasi(ogrenci, 1),
+          d2: donemOrtalamasi(ogrenci, 2),
+          ortalama: yilSonuOrtalamasi(ogrenci),
         });
       }
     });
@@ -633,6 +702,10 @@ function anaSayfaSonuclariGuncelle() {
   const farkliSube = new Set(sonuclar.map((r) => r.subeId)).size;
 
   const genelOrtalama = agirlikliOrtalamaHesapla(sonuclar.map((r) => ({ ortalama: r.ortalama, saat: r.saat })));
+  const genel1 = agirlikliOrtalamaHesapla(sonuclar.map((r) => ({ ortalama: r.d1, saat: r.saat })));
+  const genel2 = agirlikliOrtalamaHesapla(sonuclar.map((r) => ({ ortalama: r.d2, saat: r.saat })));
+  const zayifSayisi = sonuclar.filter((r) => r.ortalama !== null && r.ortalama < 50).length;
+  const sinifDurumu = sinifDurumuHesapla(zayifSayisi, sonuclar.some((r) => r.ortalama !== null));
 
   let html = "";
   if (farkliSube > 1) {
@@ -642,12 +715,21 @@ function anaSayfaSonuclariGuncelle() {
   html += `
     <div class="dt-summary-row">
       <div class="dt-summary-card dt-summary-accent">
-        <span class="dt-summary-label">Genel Ortalama</span>
+        <span class="dt-summary-label">Yıl Sonu Genel Ortalama</span>
         <span class="dt-summary-value">${genelOrtalama !== null ? fmt(genelOrtalama) : "—"}</span>
       </div>
       <div class="dt-summary-card">
-        <span class="dt-summary-label">Bulunan Kayıt</span>
-        <span class="dt-summary-value">${sonuclar.length}</span>
+        <span class="dt-summary-label">Dönem 1 Genel</span>
+        <span class="dt-summary-value">${genel1 !== null ? fmt(genel1) : "—"}</span>
+      </div>
+      <div class="dt-summary-card">
+        <span class="dt-summary-label">Dönem 2 Genel</span>
+        <span class="dt-summary-value">${genel2 !== null ? fmt(genel2) : "—"}</span>
+      </div>
+      <div class="dt-summary-card">
+        <span class="dt-summary-label">Sınıf Durumu</span>
+        <span class="dt-summary-value dt-summary-durum">${durumRozetiHtml(sinifDurumu)}</span>
+        <span class="dt-summary-sub">${zayifSayisi} zayıf ders · ${sonuclar.length} kayıt</span>
       </div>
     </div>
   `;
@@ -655,14 +737,16 @@ function anaSayfaSonuclariGuncelle() {
   {
     html += `
       <table class="dt-table">
-        <thead><tr><th>Şube</th><th>Ders</th><th>Saat</th><th>Ortalama</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Şube</th><th>Ders</th><th>Saat</th><th>Dönem 1</th><th>Dönem 2</th><th>Yıl Sonu</th><th>Durum</th></tr></thead>
         <tbody>
           ${sonuclar.map((s) => `
             <tr class="dt-row-clickable" data-action="sonuc-git" data-sube-id="${s.subeId}" data-ders-id="${s.dersId}">
               <td>${escapeHtml(s.subeAdi)}</td>
               <td>${escapeHtml(s.dersAdi)}</td>
               <td class="dt-num">${s.saat}</td>
-              <td class="dt-num">${s.ortalama !== null ? fmt(s.ortalama) : "—"}</td>
+              <td class="dt-num">${s.d1 !== null ? fmt(s.d1) : "—"}</td>
+              <td class="dt-num">${s.d2 !== null ? fmt(s.d2) : "—"}</td>
+              <td class="dt-num" style="font-weight:600">${s.ortalama !== null ? fmt(s.ortalama) : "—"}</td>
               <td>${
                 s.ortalama === null
                   ? `<span class="dt-badge dt-badge-muted">Not girilmedi</span>`
@@ -681,12 +765,266 @@ function anaSayfaSonuclariGuncelle() {
 
 // ---------- Sube Sayfasi ----------
 
+// ---------- Sag taraftaki ozet paneli ----------
+
+function ortalamaAl(dizi) {
+  return dizi.length > 0 ? dizi.reduce((a, b) => a + b, 0) / dizi.length : null;
+}
+
+function ozetKutusuHtml(etiket, deger, alt) {
+  return `
+    <div class="dt-ozet-tile">
+      <span class="dt-ozet-tile-label">${etiket}</span>
+      <span class="dt-ozet-tile-value">${deger}</span>
+      ${alt ? `<span class="dt-ozet-tile-sub">${escapeHtml(alt)}</span>` : ""}
+    </div>`;
+}
+
+function cubukHtml(etiket, degerMetni, yuzde) {
+  const genislik = yuzde === null ? 0 : Math.max(0, Math.min(100, yuzde));
+  return `
+    <div class="dt-bar">
+      <div class="dt-bar-label"><span class="dt-bar-ad">${escapeHtml(etiket)}</span><span class="dt-bar-val">${degerMetni}</span></div>
+      <div class="dt-bar-track"><div class="dt-bar-fill" style="width:${genislik}%"></div></div>
+    </div>`;
+}
+
+function subeOzetiHtml(sube) {
+  const satirlar = subeGenelSatirlariHesapla(sube);
+  const dolu = satirlar.filter((x) => x.genelOrtalama !== null);
+  if (sube.dersler.length === 0 || dolu.length === 0) {
+    return `
+      <div class="dt-ozet-card">
+        <h2 class="dt-ozet-baslik">Şube özeti · Dönem ${state.donem}</h2>
+        <p class="dt-ozet-bos">Ders ve not girdikçe şubenin ortalaması, derslere göre durumu ve dikkat gerektiren öğrenciler burada görünür.</p>
+      </div>`;
+  }
+  const subeOrt = ortalamaAl(dolu.map((x) => x.genelOrtalama));
+  const top = dolu.slice().sort((a, b) => b.genelOrtalama - a.genelOrtalama).slice(0, 3);
+  const risk = dolu.filter((x) => x.genelOrtalama < 50).sort((a, b) => a.genelOrtalama - b.genelOrtalama);
+
+  const dersCubuklari = sube.dersler.map((d) => {
+    const o = ortalamaAl(d.ogrenciler.map(ortalamaHesapla).filter((v) => v !== null));
+    return cubukHtml(d.dersAdi || "İsimsiz Ders", o !== null ? fmt(o) : "—", o);
+  }).join("");
+
+  return `
+    <div class="dt-ozet-card">
+      <h2 class="dt-ozet-baslik">Şube özeti · Dönem ${state.donem}</h2>
+      <div class="dt-ozet-tiles">
+        ${ozetKutusuHtml("Öğrenci", satirlar.length)}
+        ${ozetKutusuHtml("Ders", sube.dersler.length)}
+        ${ozetKutusuHtml("Şube ort.", fmt(subeOrt))}
+      </div>
+
+      <h3 class="dt-ozet-alt">Derslere göre ortalama</h3>
+      <div class="dt-bars">${dersCubuklari}</div>
+
+      <h3 class="dt-ozet-alt">En yüksek ortalamalar</h3>
+      <ol class="dt-ozet-liste">
+        ${top.map((x) => `<li><span>${escapeHtml(x.ad)}</span><b>${fmt(x.genelOrtalama)}</b></li>`).join("")}
+      </ol>
+
+      <h3 class="dt-ozet-alt">Genel ortalaması 50'nin altında</h3>
+      ${risk.length === 0
+        ? `<p class="dt-ozet-bos">Şu an böyle bir öğrenci yok.</p>`
+        : `<ul class="dt-ozet-liste dt-ozet-risk">${risk.map((x) => `<li><span><i class="dt-dot"></i>${escapeHtml(x.ad)}</span><b>${fmt(x.genelOrtalama)}</b></li>`).join("")}</ul>`}
+    </div>`;
+}
+
+function dersOzetiHtml(sube, ders) {
+  const ogr = ders.ogrenciler.filter((o) => o.ad.trim());
+  const liste = ogr.map((o) => ({ ad: o.ad.trim(), ort: ortalamaHesapla(o) }));
+  const dolu = liste.filter((x) => x.ort !== null);
+  const notsuz = liste.length - dolu.length;
+  if (dolu.length === 0) {
+    return `
+      <div class="dt-ozet-card">
+        <h2 class="dt-ozet-baslik">Ders özeti · Dönem ${state.donem}</h2>
+        <p class="dt-ozet-bos">Öğrenci notlarını girdikçe bu dersin ortalaması ve not dağılımı burada görünür.</p>
+      </div>`;
+  }
+  const ort = ortalamaAl(dolu.map((x) => x.ort));
+  const enYuksek = dolu.reduce((a, b) => (b.ort > a.ort ? b : a));
+  const enDusuk = dolu.reduce((a, b) => (b.ort < a.ort ? b : a));
+  const basarili = dolu.filter((x) => x.ort >= 50).length;
+  const basarisiz = dolu.length - basarili;
+
+  const araliklar = [
+    { ad: "85 – 100", say: dolu.filter((x) => x.ort >= 85).length },
+    { ad: "70 – 84", say: dolu.filter((x) => x.ort >= 70 && x.ort < 85).length },
+    { ad: "50 – 69", say: dolu.filter((x) => x.ort >= 50 && x.ort < 70).length },
+    { ad: "0 – 49", say: dolu.filter((x) => x.ort < 50).length },
+  ];
+
+  return `
+    <div class="dt-ozet-card">
+      <h2 class="dt-ozet-baslik">Ders özeti · Dönem ${state.donem}</h2>
+      <div class="dt-ozet-tiles">
+        ${ozetKutusuHtml("Ortalama", fmt(ort))}
+        ${ozetKutusuHtml("En yüksek", fmt(enYuksek.ort), enYuksek.ad)}
+        ${ozetKutusuHtml("En düşük", fmt(enDusuk.ort), enDusuk.ad)}
+      </div>
+
+      <h3 class="dt-ozet-alt">Not dağılımı</h3>
+      <div class="dt-bars">
+        ${araliklar.map((a) => cubukHtml(a.ad, `${a.say} öğrenci`, (a.say / dolu.length) * 100)).join("")}
+      </div>
+
+      <h3 class="dt-ozet-alt">Başarı durumu</h3>
+      <ul class="dt-ozet-liste">
+        <li><span>Başarılı (50 ve üzeri)</span><b>${basarili}</b></li>
+        <li><span><i class="dt-dot"></i>Başarısız (50'nin altı)</span><b>${basarisiz}</b></li>
+        ${notsuz > 0 ? `<li><span>Notu girilmemiş</span><b>${notsuz}</b></li>` : ""}
+      </ul>
+    </div>`;
+}
+
+function subeOzetHtml(sube) {
+  if (state.aktifDersId === YIL_SONU) return yilSonuOzetiHtml(sube);
+  if (state.aktifDersId === GENEL_GORUNUM) return subeOzetiHtml(sube);
+  const ders = sube.dersler.find((d) => d.id === state.aktifDersId);
+  return ders ? dersOzetiHtml(sube, ders) : subeOzetiHtml(sube);
+}
+
+// Veri degistikce paneli yeniden cizer (tablo/odak bozulmaz, yalnizca panel icerigi degisir)
+function subeOzetGuncelle() {
+  const el = document.getElementById("sube-ozet");
+  if (!el || !state.subeler) return;
+  const sube = subeBul(state.aktifSayfa);
+  if (sube) el.innerHTML = subeOzetHtml(sube);
+}
+
+// ---------- Yil Sonu ----------
+
+function yilSonuSatirlariHesapla(sube) {
+  const dersler = sube.dersler;
+  const isimMap = new Map();
+  dersler.forEach((d) => d.ogrenciler.forEach((o) => {
+    const ad = o.ad.trim();
+    if (!ad) return;
+    const key = ad.toLocaleLowerCase("tr-TR");
+    if (!isimMap.has(key)) isimMap.set(key, ad);
+  }));
+
+  const satirlar = Array.from(isimMap.entries()).map(([key, ad]) => {
+    const dersSonuc = {};
+    dersler.forEach((d) => {
+      const o = d.ogrenciler.find((x) => x.ad.trim().toLocaleLowerCase("tr-TR") === key);
+      dersSonuc[d.id] = o
+        ? { d1: donemOrtalamasi(o, 1), d2: donemOrtalamasi(o, 2), ys: yilSonuOrtalamasi(o) }
+        : { d1: null, d2: null, ys: null };
+    });
+    const liste = (alan) => dersler.map((d) => ({ ortalama: dersSonuc[d.id][alan], saat: d.dersSaati || 1 }));
+    const g1 = agirlikliOrtalamaHesapla(liste("d1"));
+    const g2 = agirlikliOrtalamaHesapla(liste("d2"));
+    const gys = agirlikliOrtalamaHesapla(liste("ys"));
+    const notluDers = dersler.filter((d) => dersSonuc[d.id].ys !== null).length;
+    const zayif = dersler.filter((d) => dersSonuc[d.id].ys !== null && dersSonuc[d.id].ys < 50).length;
+    return { ad, dersSonuc, g1, g2, gys, notluDers, zayif, durum: sinifDurumuHesapla(zayif, notluDers > 0) };
+  });
+  satirlar.sort((a, b) => a.ad.localeCompare(b.ad, "tr-TR"));
+  return satirlar;
+}
+
+function yilSonuTabloHtml(sube) {
+  const dersler = sube.dersler;
+  const satirlar = yilSonuSatirlariHesapla(sube);
+  if (dersler.length === 0 || satirlar.length === 0) {
+    return `<div class="dt-empty">Yıl sonu tablosu için bu şubede en az bir ders ve öğrenci olmalı.</div>`;
+  }
+  const hucre = (r) => {
+    if (r.ys === null) return `<td class="dt-num">—</td>`;
+    const zayif = r.ys < 50;
+    return `<td class="dt-num ${zayif ? "dt-ys-zayif" : ""}"><b>${fmt(r.ys)}</b><span class="dt-ys-sub">${r.d1 !== null ? fmt(r.d1) : "—"} | ${r.d2 !== null ? fmt(r.d2) : "—"}</span></td>`;
+  };
+  return `
+    <div class="dt-table-wrap">
+      <table class="dt-table dt-table-genel dt-table-yilsonu">
+        <thead>
+          <tr>
+            <th class="dt-th-sticky">Öğrenci Adı Soyadı</th>
+            ${dersler.map((d) => `<th class="dt-th-genel-ders"><span>${escapeHtml(d.dersAdi || "İsimsiz Ders")}</span><div class="dt-genel-saat-row"><span>${d.dersSaati || 1} sa/hf</span></div></th>`).join("")}
+            <th class="dt-group-ortalama">Dönem 1 Genel</th>
+            <th class="dt-group-ortalama">Dönem 2 Genel</th>
+            <th class="dt-group-ortalama">Yıl Sonu Genel</th>
+            <th>Zayıf Ders</th>
+            <th>Sınıf Durumu</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${satirlar.map((s) => `
+            <tr>
+              <td class="dt-th-sticky">${escapeHtml(s.ad)}</td>
+              ${dersler.map((d) => hucre(s.dersSonuc[d.id])).join("")}
+              <td class="dt-group-ortalama dt-num">${s.g1 !== null ? fmt(s.g1) : "—"}</td>
+              <td class="dt-group-ortalama dt-num">${s.g2 !== null ? fmt(s.g2) : "—"}</td>
+              <td class="dt-group-ortalama dt-num" style="font-weight:600">${s.gys !== null ? fmt(s.gys) : "—"}</td>
+              <td class="dt-num">${s.notluDers > 0 ? s.zayif : "—"}</td>
+              <td>${durumRozetiHtml(s.durum)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function yilSonuHtml(sube) {
+  const lim = state.ayarlar.sorumluLimit;
+  return `
+    <div>
+      <div class="dt-ys-ayar">
+        <label for="sorumlu-limit">Sınıf durumu kuralı: yıl sonu ortalaması 50'nin altında olan ders sayısı
+          <b>0</b> ise Geçti, en fazla
+          <input type="number" min="0" max="30" id="sorumlu-limit" class="js-sorumlu-limit" value="${lim}" />
+          ise Sorumlu, daha fazlaysa Kaldı.</label>
+        <p>Her ders hücresinde kalın sayı yıl sonu ortalamasıdır, altındaki küçük sayılar <i>Dönem 1 | Dönem 2</i> ortalamalarıdır. Bir derste yalnızca tek dönemin notu varsa o dönem yıl sonu sayılır. Bu kural okulunuzun yönetmeliğine göre ayarlanabilir.</p>
+      </div>
+      <div id="yilsonu-tablo">${yilSonuTabloHtml(sube)}</div>
+    </div>`;
+}
+
+function yilSonuOzetiHtml(sube) {
+  const satirlar = yilSonuSatirlariHesapla(sube).filter((x) => x.durum !== null);
+  if (satirlar.length === 0) {
+    return `
+      <div class="dt-ozet-card">
+        <h2 class="dt-ozet-baslik">Yıl sonu özeti</h2>
+        <p class="dt-ozet-bos">Not girdikçe geçen, sorumlu ve kalan öğrenci sayıları burada görünür.</p>
+      </div>`;
+  }
+  const say = (d) => satirlar.filter((x) => x.durum === d).length;
+  const dikkat = satirlar.filter((x) => x.durum !== "gecti").sort((a, b) => b.zayif - a.zayif);
+  return `
+    <div class="dt-ozet-card">
+      <h2 class="dt-ozet-baslik">Yıl sonu özeti</h2>
+      <div class="dt-ozet-tiles">
+        ${ozetKutusuHtml("Geçti", say("gecti"))}
+        ${ozetKutusuHtml("Sorumlu", say("sorumlu"))}
+        ${ozetKutusuHtml("Kaldı", say("kaldi"))}
+      </div>
+      <h3 class="dt-ozet-alt">Dikkat gerektirenler</h3>
+      ${dikkat.length === 0
+        ? `<p class="dt-ozet-bos">Şu an sorumlu ya da kalan öğrenci yok.</p>`
+        : `<ul class="dt-ozet-liste dt-ozet-risk">${dikkat.map((x) => `<li><span><i class="dt-dot"></i>${escapeHtml(x.ad)} · ${x.zayif} zayıf</span><b>${x.durum === "kaldi" ? "Kaldı" : "Sorumlu"}</b></li>`).join("")}</ul>`}
+    </div>`;
+}
+
+function yilSonuGuncelle() {
+  const sube = subeBul(state.aktifSayfa);
+  const t = document.getElementById("yilsonu-tablo");
+  if (sube && t) t.innerHTML = yilSonuTabloHtml(sube);
+  subeOzetGuncelle();
+}
+
 function subeSayfaHtml(sube) {
   const genelAktif = state.aktifDersId === GENEL_GORUNUM;
+  const ysAktif = state.aktifDersId === YIL_SONU;
   const aktifDers = sube.dersler.find((d) => d.id === state.aktifDersId);
 
   let icerik;
-  if (genelAktif) {
+  if (ysAktif) {
+    icerik = yilSonuHtml(sube);
+  } else if (genelAktif) {
     icerik = subeGenelGorunumHtml(sube);
   } else if (!aktifDers) {
     icerik = `<div class="dt-empty">Bu şubede henüz ders yok. Başlamak için yukarıdan "Ders Ekle" butonuna tıklayın.</div>`;
@@ -695,14 +1033,25 @@ function subeSayfaHtml(sube) {
   }
 
   return `
-    <div class="dt-page">
+    <div class="dt-page dt-page-wide">
       <header class="dt-page-head">
         <h1>${escapeHtml(sube.ad)}</h1>
         <p>Bu şubeye ait dersleri yönetin. Her ders için öğrenci ve not girişi yapabilirsiniz.</p>
       </header>
+      ${ysAktif ? "" : `
+      <div class="dt-donem-row">
+        <div class="dt-seg" role="group" aria-label="Dönem">
+          <button class="dt-seg-btn ${state.donem === 1 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="1">Dönem 1</button>
+          <button class="dt-seg-btn ${state.donem === 2 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="2">Dönem 2</button>
+        </div>
+        <span class="dt-donem-not">Şu an <b>Dönem ${state.donem}</b> notlarını görüyorsunuz ve giriyorsunuz.</span>
+      </div>`}
       <div class="dt-pill-row">
         <div class="dt-pill dt-pill-genel ${genelAktif ? "dt-pill-active" : ""}" data-action="genel-gorunum" data-sube-id="${sube.id}">
           <span>👥 Genel Görünüm</span>
+        </div>
+        <div class="dt-pill dt-pill-yilsonu ${ysAktif ? "dt-pill-active" : ""}" data-action="yil-sonu" data-sube-id="${sube.id}">
+          <span>📊 Yıl Sonu</span>
         </div>
         <div class="dt-pill-divider"></div>
         ${sube.dersler.map((d) => `
@@ -713,7 +1062,10 @@ function subeSayfaHtml(sube) {
         `).join("")}
         <button class="dt-pill dt-pill-add" data-action="ders-ekle" data-sube-id="${sube.id}">+ Ders Ekle</button>
       </div>
-      <div id="sube-icerik">${icerik}</div>
+      <div class="dt-sube-layout">
+        <div class="dt-sube-main" id="sube-icerik">${icerik}</div>
+        <aside class="dt-sube-ozet" id="sube-ozet" aria-label="Özet">${subeOzetHtml(sube)}</aside>
+      </div>
     </div>
   `;
 }
@@ -770,7 +1122,7 @@ function subeGenelGorunumHtml(sube) {
                   <span>sa/hf</span>
                 </div>
               </th>`).join("")}
-            <th class="dt-group-ortalama">Genel Ortalama</th>
+            <th class="dt-group-ortalama">Genel Ortalama <span class="dt-th-donem">D${state.donem}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -804,6 +1156,7 @@ function dersTablosuHtml(sube, ders) {
           <input type="number" min="1" max="20" class="dt-ders-saati-input" id="ders-saati-input" data-sube-id="${sube.id}" data-ders-id="${ders.id}" value="${ders.dersSaati || 1}" />
         </div>
       </div>
+      <div class="dt-donem-banner dt-donem-${state.donem}">Dönem ${state.donem} notlarını giriyorsunuz</div>
       <p class="dt-ders-saati-aciklama">Bu değer, öğrencinin genel ortalaması hesaplanırken bu dersin ne kadar ağırlıklı sayılacağını belirler (örn. 6 saatlik bir ders, 1 saatlik bir derse göre genel ortalamaya çok daha fazla etki eder).</p>
       <div class="dt-table-wrap">
         <table class="dt-table dt-table-editable">
@@ -832,7 +1185,7 @@ function dersTablosuHtml(sube, ders) {
                   <td data-label="${f.label}" class="dt-group-${f.grup}">
                     <input class="dt-cell-input dt-cell-num js-ogr-not" type="number" min="0" max="100"
                       data-sube-id="${sube.id}" data-ders-id="${ders.id}" data-ogr-id="${o.id}" data-field="${f.key}"
-                      placeholder="—" value="${escapeHtml(o[f.key])}" />
+                      placeholder="—" value="${escapeHtml(notAl(o, f.key, state.donem))}" />
                   </td>
                 `).join("")}
                 <td data-label="Ortalama" class="dt-group-ortalama dt-num dt-cell-computed js-ortalama-cell" data-ogr-id="${o.id}">
@@ -895,6 +1248,12 @@ function tiklamaDinleyicisiniBagla() {
       state.aktifDersId = GENEL_GORUNUM;
       renderMain();
       eventleriBaglaMain();
+    } else if (action === "yil-sonu") {
+      state.aktifDersId = YIL_SONU;
+      render();
+    } else if (action === "donem-sec") {
+      state.donem = parseInt(el.dataset.donem, 10) === 2 ? 2 : 1;
+      render();
     } else if (action === "ders-sec") {
       state.aktifSayfa = el.dataset.subeId;
       state.aktifDersId = el.dataset.dersId;
@@ -1026,6 +1385,17 @@ function eventleriBaglaMain() {
     });
   });
 
+  // Yil sonu: sorumlu siniri
+  main.querySelectorAll(".js-sorumlu-limit").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const v = parseInt(e.target.value, 10);
+      if (Number.isNaN(v) || v < 0) return;
+      state.ayarlar.sorumluLimit = v;
+      ayarlariKaydet();
+      yilSonuGuncelle();
+    });
+  });
+
   // Not inputlari
   main.querySelectorAll(".js-ogr-not").forEach((input) => {
     input.addEventListener("input", (e) => {
@@ -1033,7 +1403,7 @@ function eventleriBaglaMain() {
       const sube = subeBul(subeId);
       const ders = dersBul(sube, dersId);
       const ogr = ders.ogrenciler.find((o) => o.id === ogrId);
-      ogr[field] = e.target.value;
+      notYaz(ogr, field, e.target.value, state.donem);
 
       const ortCell = main.querySelector(`.js-ortalama-cell[data-ogr-id="${ogrId}"]`);
       const yeniOrt = ortalamaHesapla(ogr);
