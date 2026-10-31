@@ -495,3 +495,25 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
 .dt-table-yilsonu th.dt-th-genel-ders { min-width:0; width:auto; font-size:11.5px; }
 .dt-table-yilsonu th { font-size:11.5px; white-space:normal; line-height:1.2; }
 .dt-ys-sub { white-space:nowrap; font-size:10px; }
+
+/* ---------- Öğrenci yorumları ---------- */
+.dt-ad-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; color: inherit; font: inherit; border-bottom: 1px dashed rgba(192,138,46,.7); }
+.dt-ad-btn:hover { color: #C08A2E; }
+.dt-ad-btn:focus-visible, .dt-yorum-btn:focus-visible { outline: 2px solid #C08A2E; outline-offset: 2px; }
+.dt-yorum-sayi { font-size: 11px; font-weight: 600; background: #FBF0D9; color: #8a5d0c; border-radius: 999px; padding: 1px 7px; }
+.dt-yorum-btn { border: 0; background: rgba(255,255,255,.12); color: #fff; border-radius: 6px; padding: 4px 7px; font-size: 13px; cursor: pointer; flex: none; margin-left: 6px; display: inline-flex; gap: 3px; align-items: center; }
+.dt-yorum-btn:hover { background: #C08A2E; }
+.dt-yorum-btn b { font-size: 11px; }
+.dt-yorum-modal { max-width: 560px; }
+.dt-yorum-ust { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.dt-yorum-kapat { border: 0; background: transparent; font-size: 18px; cursor: pointer; color: #5b6477; padding: 4px 8px; }
+.dt-yorum-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #bfb8a6; border-radius: 8px; padding: 10px 12px; font: 14px/1.5 Inter, sans-serif; resize: vertical; }
+.dt-yorum-form-alt { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.dt-yorum-form-alt select { border: 1px solid #bfb8a6; border-radius: 7px; padding: 8px 10px; font: 13px Inter, sans-serif; max-width: 55%; }
+#yorum-liste { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.dt-yorum-kart { border: 1px solid #e4dfd2; border-left: 3px solid #C08A2E; background: #FBFAF7; border-radius: 8px; padding: 10px 12px; }
+.dt-yorum-kart p { margin: 6px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: #1B2A4A; }
+.dt-yorum-meta { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #5b6477; flex-wrap: wrap; }
+.dt-yorum-etiket { background: #1B2A4A; color: #fff; border-radius: 999px; padding: 1px 8px; font-weight: 600; }
+.dt-yorum-sil { margin-left: auto; border: 0; background: transparent; color: #a3261f; font-size: 12px; cursor: pointer; }
+.dt-yorum-sil:hover { text-decoration: underline; }

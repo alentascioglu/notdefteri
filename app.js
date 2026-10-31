@@ -43,7 +43,7 @@ const GRADE_FIELDS = [
 
 const GENEL_GORUNUM = "__genel__";
 const YIL_SONU = "__yilsonu__";
-const SURUM = "30 Ekim 2026 · dönemler";
+const SURUM = "31 Ekim 2026 · öğrenci yorumları";
 
 const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
 const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
@@ -157,6 +157,7 @@ const state = {
   aktifDersId: null,
   donem: 1,              // 1 | 2 (sube sayfalarinda secili donem)
   ayarlar: { sorumluLimit: 3 },
+  yorumlar: {},          // subeId -> [{id, ogr, metin, tarih, ders}]
   aramaAdi: "",
   oneriAcik: false,
   oneriIndex: -1,
@@ -221,6 +222,15 @@ async function verileriYukle() {
   state.subeler = subeler;
 
   try {
+    const yd = await Promise.all(SUBE_SIRALI_LISTE.map((m) => db.collection("yorumlar").doc(m.id).get()));
+    yd.forEach((doc, i) => {
+      state.yorumlar[SUBE_SIRALI_LISTE[i].id] = doc.exists && Array.isArray(doc.data().liste) ? doc.data().liste : [];
+    });
+  } catch (e) {
+    console.warn("Yorumlar okunamadi:", e);
+  }
+
+  try {
     const ay = await db.collection("ayarlar").doc("genel").get();
     if (ay.exists) {
       const lim = parseInt(ay.data().sorumluLimit, 10);
@@ -229,6 +239,125 @@ async function verileriYukle() {
   } catch (e) {
     console.warn("Ayarlar okunamadi, varsayilan kullaniliyor:", e);
   }
+}
+
+// ---------- Ogrenci yorumlari ----------
+const yorumAnahtari = (ad) => String(ad || "").trim().toLocaleLowerCase("tr-TR");
+
+function yorumListesi(subeId, ad) {
+  const k = yorumAnahtari(ad);
+  return (state.yorumlar[subeId] || []).filter((y) => y.ogr === k);
+}
+
+const yorumTimers = {};
+function yorumlariKaydet(subeId) {
+  if (yorumTimers[subeId]) clearTimeout(yorumTimers[subeId]);
+  state.kayitDurumu = "saving";
+  guncelleKayitDurumu();
+  yorumTimers[subeId] = setTimeout(async () => {
+    try {
+      await db.collection("yorumlar").doc(subeId).set({ liste: state.yorumlar[subeId] || [] });
+      state.kayitDurumu = "saved";
+    } catch (e) {
+      console.error("Yorum kayit hatasi:", e);
+      state.kayitDurumu = "error";
+    }
+    guncelleKayitDurumu();
+  }, 600);
+}
+
+function yorumModalKapat() {
+  const m = document.getElementById("yorum-modal");
+  if (m) m.remove();
+  document.removeEventListener("keydown", yorumEscDinle);
+  if (state.aktifSayfa !== "ana" && state.subeler) { renderMain(); eventleriBaglaMain(); }
+}
+function yorumEscDinle(e) { if (e.key === "Escape") yorumModalKapat(); }
+
+function yorumModalAc(subeId, ad) {
+  ad = String(ad || "").trim();
+  if (!ad) { window.alert("Önce öğrencinin adını yazın."); return; }
+  const sube = subeBul(subeId);
+  const aktifDers = sube.dersler.find((d) => d.id === state.aktifDersId);
+  const tarihMetni = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("tr-TR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  document.getElementById("yorum-modal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "yorum-modal";
+  overlay.className = "dt-modal-overlay";
+  overlay.innerHTML = `
+    <div class="dt-modal dt-yorum-modal" role="dialog" aria-label="Öğrenci yorumları">
+      <div class="dt-yorum-ust">
+        <div>
+          <h2>${escapeHtml(ad)}</h2>
+          <p class="dt-modal-desc">${escapeHtml(sube.ad)} · Yorumlar öğrenciye bağlıdır, tüm derslerde ortaktır ve yalnızca siz görürsünüz.</p>
+        </div>
+        <button class="dt-yorum-kapat" id="yorum-kapat" title="Kapat" aria-label="Kapat">✕</button>
+      </div>
+      <div class="dt-yorum-form">
+        <textarea id="yorum-metin" rows="3" maxlength="2000" placeholder="Bu öğrenci hakkında yorum/gözlem yazın..."></textarea>
+        <div class="dt-yorum-form-alt">
+          <select id="yorum-ders" aria-label="Ders etiketi">
+            <option value="">Genel (ders etiketi yok)</option>
+            ${sube.dersler.map((d) => `<option value="${escapeHtml(d.dersAdi || "İsimsiz Ders")}" ${aktifDers && aktifDers.id === d.id ? "selected" : ""}>${escapeHtml(d.dersAdi || "İsimsiz Ders")}</option>`).join("")}
+          </select>
+          <button class="dt-modal-ok" id="yorum-ekle">Yorumu Ekle</button>
+        </div>
+      </div>
+      <div id="yorum-liste"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const listeCiz = () => {
+    const liste = yorumListesi(subeId, ad).slice().sort((a, b) => (a.tarih < b.tarih ? 1 : -1));
+    overlay.querySelector("#yorum-liste").innerHTML = liste.length === 0
+      ? `<p class="dt-ozet-bos">Henüz yorum yok.</p>`
+      : liste.map((y) => `
+        <div class="dt-yorum-kart">
+          <div class="dt-yorum-meta">
+            <span>${escapeHtml(tarihMetni(y.tarih))}</span>
+            ${y.ders ? `<span class="dt-yorum-etiket">${escapeHtml(y.ders)}</span>` : ""}
+            <button class="dt-yorum-sil" data-yorum-id="${y.id}" title="Yorumu sil">Sil</button>
+          </div>
+          <p>${escapeHtml(y.metin)}</p>
+        </div>`).join("");
+  };
+  listeCiz();
+
+  const metin = overlay.querySelector("#yorum-metin");
+  const ekle = () => {
+    const t = metin.value.trim();
+    if (!t) { metin.focus(); return; }
+    if (!state.yorumlar[subeId]) state.yorumlar[subeId] = [];
+    state.yorumlar[subeId].push({
+      id: idUret("y"), ogr: yorumAnahtari(ad), metin: t, tarih: new Date().toISOString(),
+      ders: overlay.querySelector("#yorum-ders").value,
+    });
+    yorumlariKaydet(subeId);
+    metin.value = "";
+    listeCiz();
+  };
+  overlay.querySelector("#yorum-ekle").addEventListener("click", ekle);
+  metin.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") ekle(); });
+  overlay.querySelector("#yorum-liste").addEventListener("click", (e) => {
+    const b = e.target.closest(".dt-yorum-sil");
+    if (!b || !window.confirm("Bu yorum silinsin mi?")) return;
+    state.yorumlar[subeId] = (state.yorumlar[subeId] || []).filter((y) => y.id !== b.dataset.yorumId);
+    yorumlariKaydet(subeId);
+    listeCiz();
+  });
+  overlay.querySelector("#yorum-kapat").addEventListener("click", yorumModalKapat);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) yorumModalKapat(); });
+  document.addEventListener("keydown", yorumEscDinle);
+  metin.focus();
+}
+
+function adButonuHtml(subeId, ad) {
+  const n = yorumListesi(subeId, ad).length;
+  return `<button type="button" class="dt-ad-btn" data-action="yorum-ac" data-sube-id="${subeId}" data-ad="${escapeHtml(ad)}" title="Yorumları aç">${escapeHtml(ad)}${n > 0 ? `<span class="dt-yorum-sayi">💬 ${n}</span>` : ""}</button>`;
 }
 
 let ayarTimer = null;
@@ -955,7 +1084,7 @@ function yilSonuTabloHtml(sube) {
         <tbody>
           ${satirlar.map((s) => `
             <tr>
-              <td class="dt-th-sticky">${escapeHtml(s.ad)}</td>
+              <td class="dt-th-sticky">${adButonuHtml(sube.id, s.ad)}</td>
               ${dersler.map((d) => hucre(s.dersSonuc[d.id])).join("")}
               <td class="dt-group-ortalama dt-num">${s.g1 !== null ? fmt(s.g1) : "—"}</td>
               <td class="dt-group-ortalama dt-num">${s.g2 !== null ? fmt(s.g2) : "—"}</td>
@@ -1038,21 +1167,21 @@ function subeSayfaHtml(sube) {
         <h1>${escapeHtml(sube.ad)}</h1>
         <p>Bu şubeye ait dersleri yönetin. Her ders için öğrenci ve not girişi yapabilirsiniz.</p>
       </header>
-      ${ysAktif ? "" : `
       <div class="dt-donem-row">
         <div class="dt-seg" role="group" aria-label="Dönem">
-          <button class="dt-seg-btn ${state.donem === 1 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="1">Dönem 1</button>
-          <button class="dt-seg-btn ${state.donem === 2 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="2">Dönem 2</button>
+          <button class="dt-seg-btn ${!ysAktif && state.donem === 1 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="1">Dönem 1</button>
+          <button class="dt-seg-btn ${!ysAktif && state.donem === 2 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="2">Dönem 2</button>
+          <button class="dt-seg-btn ${ysAktif ? "dt-seg-active" : ""}" data-action="yil-sonu" data-sube-id="${sube.id}">📊 Yıl Sonu</button>
         </div>
-        <span class="dt-donem-not">Şu an <b>Dönem ${state.donem}</b> notlarını görüyorsunuz ve giriyorsunuz.</span>
-      </div>`}
+        <span class="dt-donem-not">${ysAktif
+          ? "Yıl sonu: iki dönemin ortalaması ve sınıf durumu (not girişi için bir dönem seçin)."
+          : `Şu an <b>Dönem ${state.donem}</b> notlarını görüyorsunuz ve giriyorsunuz.`}</span>
+      </div>
       <div class="dt-pill-row">
         <div class="dt-pill dt-pill-genel ${genelAktif ? "dt-pill-active" : ""}" data-action="genel-gorunum" data-sube-id="${sube.id}">
           <span>👥 Genel Görünüm</span>
         </div>
-        <div class="dt-pill dt-pill-yilsonu ${ysAktif ? "dt-pill-active" : ""}" data-action="yil-sonu" data-sube-id="${sube.id}">
-          <span>📊 Yıl Sonu</span>
-        </div>
+
         <div class="dt-pill-divider"></div>
         ${sube.dersler.map((d) => `
           <div class="dt-pill ${state.aktifDersId === d.id ? "dt-pill-active" : ""}" data-action="ders-sec" data-sube-id="${sube.id}" data-ders-id="${d.id}">
@@ -1128,7 +1257,7 @@ function subeGenelGorunumHtml(sube) {
         <tbody>
           ${satirlar.map((s) => `
             <tr>
-              <td class="dt-th-sticky">${escapeHtml(s.ad)}</td>
+              <td class="dt-th-sticky">${adButonuHtml(sube.id, s.ad)}</td>
               ${dersler.map((d) => `<td class="dt-num">${s.dersOrtalamalari[d.id] !== null ? fmt(s.dersOrtalamalari[d.id]) : "—"}</td>`).join("")}
               <td class="dt-group-ortalama dt-num" style="font-weight:600">${s.genelOrtalama !== null ? fmt(s.genelOrtalama) : "—"}</td>
             </tr>
@@ -1180,6 +1309,7 @@ function dersTablosuHtml(sube, ders) {
               <tr data-ogr-id="${o.id}">
                 <td class="dt-th-sticky dt-cell-name-bar">
                   <input class="dt-cell-input dt-cell-text js-ogr-ad" data-sube-id="${sube.id}" data-ders-id="${ders.id}" data-ogr-id="${o.id}" placeholder="Ad Soyad" value="${escapeHtml(o.ad)}" />
+                  <button type="button" class="dt-yorum-btn" data-action="yorum-ac" data-sube-id="${sube.id}" title="Öğrenci yorumları">💬${yorumListesi(sube.id, o.ad).length > 0 ? `<b>${yorumListesi(sube.id, o.ad).length}</b>` : ""}</button>
                 </td>
                 ${GRADE_FIELDS.map((f) => `
                   <td data-label="${f.label}" class="dt-group-${f.grup}">
@@ -1248,11 +1378,15 @@ function tiklamaDinleyicisiniBagla() {
       state.aktifDersId = GENEL_GORUNUM;
       renderMain();
       eventleriBaglaMain();
+    } else if (action === "yorum-ac") {
+      const girdi = el.closest("td") && el.closest("td").querySelector(".js-ogr-ad");
+      yorumModalAc(el.dataset.subeId, girdi ? girdi.value : el.dataset.ad);
     } else if (action === "yil-sonu") {
       state.aktifDersId = YIL_SONU;
       render();
     } else if (action === "donem-sec") {
       state.donem = parseInt(el.dataset.donem, 10) === 2 ? 2 : 1;
+      if (state.aktifDersId === YIL_SONU) state.aktifDersId = GENEL_GORUNUM;
       render();
     } else if (action === "ders-sec") {
       state.aktifSayfa = el.dataset.subeId;
