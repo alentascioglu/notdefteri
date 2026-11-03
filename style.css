@@ -517,3 +517,7 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
 .dt-yorum-etiket { background: #1B2A4A; color: #fff; border-radius: 999px; padding: 1px 8px; font-weight: 600; }
 .dt-yorum-sil { margin-left: auto; border: 0; background: transparent; color: #a3261f; font-size: 12px; cursor: pointer; }
 .dt-yorum-sil:hover { text-decoration: underline; }
+.dt-yorum-yazan-label { display:block; font:600 12px Inter, sans-serif; color:#5b6477; margin:0 0 4px; }
+.dt-yorum-yazan { width:100%; box-sizing:border-box; border:1px solid #bfb8a6; border-radius:8px; padding:9px 12px; margin-bottom:8px; font:14px Inter, sans-serif; }
+.dt-yorum-yazan.dt-yorum-hata { border-color:#a3261f; box-shadow:0 0 0 2px rgba(163,38,31,.15); }
+.dt-yorum-yazan-bilgi { color:#1B2A4A; }

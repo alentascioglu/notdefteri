@@ -43,7 +43,7 @@ const GRADE_FIELDS = [
 
 const GENEL_GORUNUM = "__genel__";
 const YIL_SONU = "__yilsonu__";
-const SURUM = "31 Ekim 2026 · öğrenci yorumları";
+const SURUM = "3 Kasım 2026 · yorumu giren";
 
 const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
 const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
@@ -266,6 +266,10 @@ function yorumlariKaydet(subeId) {
   }, 600);
 }
 
+// Son kullanilan "yorumu giren" adi bu tarayicida hatirlanir (kolaylik icin)
+function sonYazanOku() { try { return localStorage.getItem("notdefteri-yazan") || ""; } catch (e) { return ""; } }
+function sonYazanKaydet(ad) { try { localStorage.setItem("notdefteri-yazan", ad); } catch (e) { /* yok say */ } }
+
 function yorumModalKapat() {
   const m = document.getElementById("yorum-modal");
   if (m) m.remove();
@@ -298,6 +302,8 @@ function yorumModalAc(subeId, ad) {
         <button class="dt-yorum-kapat" id="yorum-kapat" title="Kapat" aria-label="Kapat">✕</button>
       </div>
       <div class="dt-yorum-form">
+        <label class="dt-yorum-yazan-label" for="yorum-yazan">Yorumu giren (Ad Soyad)</label>
+        <input type="text" id="yorum-yazan" class="dt-yorum-yazan" maxlength="80" placeholder="Örn. Ayşe Demir" value="${escapeHtml(sonYazanOku())}" />
         <textarea id="yorum-metin" rows="3" maxlength="2000" placeholder="Bu öğrenci hakkında yorum/gözlem yazın..."></textarea>
         <div class="dt-yorum-form-alt">
           <select id="yorum-ders" aria-label="Ders etiketi">
@@ -319,6 +325,7 @@ function yorumModalAc(subeId, ad) {
         <div class="dt-yorum-kart">
           <div class="dt-yorum-meta">
             <span>${escapeHtml(tarihMetni(y.tarih))}</span>
+            ${y.yazan ? `<span class="dt-yorum-yazan-bilgi">Yorumu giren: <b>${escapeHtml(y.yazan)}</b></span>` : ""}
             ${y.ders ? `<span class="dt-yorum-etiket">${escapeHtml(y.ders)}</span>` : ""}
             <button class="dt-yorum-sil" data-yorum-id="${y.id}" title="Yorumu sil">Sil</button>
           </div>
@@ -330,10 +337,15 @@ function yorumModalAc(subeId, ad) {
   const metin = overlay.querySelector("#yorum-metin");
   const ekle = () => {
     const t = metin.value.trim();
+    const yazanKutu = overlay.querySelector("#yorum-yazan");
+    const yazan = yazanKutu.value.trim().replace(/\s+/g, " ");
+    if (!yazan) { yazanKutu.classList.add("dt-yorum-hata"); yazanKutu.focus(); return; }
+    yazanKutu.classList.remove("dt-yorum-hata");
     if (!t) { metin.focus(); return; }
+    sonYazanKaydet(yazan);
     if (!state.yorumlar[subeId]) state.yorumlar[subeId] = [];
     state.yorumlar[subeId].push({
-      id: idUret("y"), ogr: yorumAnahtari(ad), metin: t, tarih: new Date().toISOString(),
+      id: idUret("y"), ogr: yorumAnahtari(ad), metin: t, yazan, tarih: new Date().toISOString(),
       ders: overlay.querySelector("#yorum-ders").value,
     });
     yorumlariKaydet(subeId);
