@@ -43,7 +43,7 @@ const GRADE_FIELDS = [
 
 const GENEL_GORUNUM = "__genel__";
 const YIL_SONU = "__yilsonu__";
-const SURUM = "3 Kasım 2026 · yorumu giren";
+const SURUM = "23 Kasım 2026 · PDF çıktısı";
 
 const OKUL_ADI_TR = "ÖZEL GETRONAGAN ERMENİ ANADOLU LİSESİ";
 const OKUL_ADI_HY = "ԱԶԳԱՅԻՆ ԿԵԴՐՈՆԱԿԱՆ ՎԱՐԺԱՐԱՆ";
@@ -1157,6 +1157,126 @@ function yilSonuGuncelle() {
   subeOzetGuncelle();
 }
 
+// ---------- PDF ciktisi ----------
+// Tarayicinin yazdirma ozelligini kullanir: "PDF olarak kaydet" secilerek PDF alinir.
+// Boylece ek kutuphane gerekmez, Turkce ve Ermenice karakterler dogru cikar.
+
+function pdfTarihMetni() {
+  return new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function pdfUstBilgiHtml(baslik, altBaslik) {
+  return `
+    <div class="pdf-ust">
+      <img class="pdf-logo" src="logo-koyu.png" alt="" onerror="this.style.display='none'" />
+      <div class="pdf-okul">
+        <div class="pdf-okul-hy" lang="hy">${OKUL_ADI_HY}</div>
+        <div class="pdf-okul-tr">${OKUL_ADI_TR}</div>
+      </div>
+      <div class="pdf-tarih">${escapeHtml(pdfTarihMetni())}</div>
+    </div>
+    <h1 class="pdf-baslik">${escapeHtml(baslik)}</h1>
+    <p class="pdf-alt">${escapeHtml(altBaslik)}</p>`;
+}
+
+function pdfDonemGenelHtml(sube) {
+  const dersler = sube.dersler;
+  const satirlar = subeGenelSatirlariHesapla(sube);
+  const hucre = (v) => v === null ? "—" : `<span class="${v < 50 ? "pdf-zayif" : ""}">${fmt(v)}</span>`;
+  const dersOrt = dersler.map((d) => {
+    const v = satirlar.map((s) => s.dersOrtalamalari[d.id]).filter((x) => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  });
+  const genelDolu = satirlar.map((s) => s.genelOrtalama).filter((x) => x !== null);
+  const genelOrt = genelDolu.length ? genelDolu.reduce((a, b) => a + b, 0) / genelDolu.length : null;
+
+  return pdfUstBilgiHtml(`${sube.ad} · Genel Görünüm · Dönem ${state.donem}`,
+      `${satirlar.length} öğrenci · ${dersler.length} ders · Genel ortalama, derslerin haftalık ders saatine göre ağırlıklı hesaplanmıştır.`) + `
+    <table class="pdf-tablo">
+      <thead><tr>
+        <th class="pdf-sira">#</th>
+        <th class="pdf-ad">Öğrenci Adı Soyadı</th>
+        ${dersler.map((d) => `<th>${escapeHtml(d.dersAdi || "İsimsiz Ders")}<small>${d.dersSaati || 1} sa/hf</small></th>`).join("")}
+        <th class="pdf-genel">Genel Ortalama</th>
+      </tr></thead>
+      <tbody>
+        ${satirlar.map((s, i) => `<tr>
+          <td class="pdf-sira">${i + 1}</td>
+          <td class="pdf-ad">${escapeHtml(s.ad)}</td>
+          ${dersler.map((d) => `<td>${hucre(s.dersOrtalamalari[d.id])}</td>`).join("")}
+          <td class="pdf-genel">${hucre(s.genelOrtalama)}</td>
+        </tr>`).join("")}
+      </tbody>
+      <tfoot><tr>
+        <td></td><td class="pdf-ad">Ders ortalaması</td>
+        ${dersOrt.map((v) => `<td>${v === null ? "—" : fmt(v)}</td>`).join("")}
+        <td class="pdf-genel">${genelOrt === null ? "—" : fmt(genelOrt)}</td>
+      </tr></tfoot>
+    </table>
+    <p class="pdf-dipnot">Kırmızı ve kalın değerler 50'nin altındadır. Boş bırakılan notlar ortalamaya katılmaz.</p>`;
+}
+
+function pdfYilSonuHtml(sube) {
+  const dersler = sube.dersler;
+  const satirlar = yilSonuSatirlariHesapla(sube);
+  const lim = state.ayarlar.sorumluLimit;
+  const sayi = (d) => satirlar.filter((s) => s.durum === d).length;
+  const hucre = (v) => v === null ? "—" : `<span class="${v < 50 ? "pdf-zayif" : ""}">${fmt(v)}</span>`;
+  const durumMetni = { gecti: "Geçti", sorumlu: "Sorumlu", kaldi: "Kaldı" };
+
+  return pdfUstBilgiHtml(`${sube.ad} · Yıl Sonu Durumu`,
+      `${satirlar.length} öğrenci · Geçti: ${sayi("gecti")} · Sorumlu: ${sayi("sorumlu")} · Kaldı: ${sayi("kaldi")}`) + `
+    <table class="pdf-tablo">
+      <thead><tr>
+        <th class="pdf-sira">#</th>
+        <th class="pdf-ad">Öğrenci Adı Soyadı</th>
+        ${dersler.map((d) => `<th>${escapeHtml(d.dersAdi || "İsimsiz Ders")}<small>${d.dersSaati || 1} sa/hf</small></th>`).join("")}
+        <th class="pdf-genel">D1 Genel</th><th class="pdf-genel">D2 Genel</th><th class="pdf-genel">Yıl Sonu Genel</th>
+        <th>Zayıf Ders</th><th>Sınıf Durumu</th>
+      </tr></thead>
+      <tbody>
+        ${satirlar.map((s, i) => `<tr>
+          <td class="pdf-sira">${i + 1}</td>
+          <td class="pdf-ad">${escapeHtml(s.ad)}</td>
+          ${dersler.map((d) => { const r = s.dersSonuc[d.id]; return `<td>${hucre(r.ys)}${r.ys !== null ? `<small>${r.d1 !== null ? fmt(r.d1) : "—"} | ${r.d2 !== null ? fmt(r.d2) : "—"}</small>` : ""}</td>`; }).join("")}
+          <td class="pdf-genel">${hucre(s.g1)}</td><td class="pdf-genel">${hucre(s.g2)}</td><td class="pdf-genel">${hucre(s.gys)}</td>
+          <td>${s.notluDers > 0 ? s.zayif : "—"}</td>
+          <td class="pdf-durum pdf-durum-${s.durum || "yok"}">${s.durum ? durumMetni[s.durum] : "—"}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    <p class="pdf-dipnot">Ders hücrelerinde kalın sayı yıl sonu ortalamasıdır, altındaki sayılar Dönem 1 | Dönem 2 ortalamalarıdır. Yalnızca tek dönemin notu olan derste o dönem yıl sonu sayılmıştır. Sınıf durumu: yıl sonu ortalaması 50'nin altında kalan ders sayısı 0 ise Geçti, en fazla ${lim} ise Sorumlu, daha fazlaysa Kaldı.</p>`;
+}
+
+function pdfCiktisiAl(subeId) {
+  const sube = subeBul(subeId);
+  if (!sube) return;
+  const ys = state.aktifDersId === YIL_SONU;
+  if (sube.dersler.length === 0 || subeGenelSatirlariHesapla(sube).length === 0) {
+    window.alert("PDF almak için şubede en az bir ders ve öğrenci olmalı.");
+    return;
+  }
+
+  let kok = document.getElementById("print-root");
+  if (!kok) {
+    kok = document.createElement("div");
+    kok.id = "print-root";
+    document.body.appendChild(kok);
+  }
+  kok.innerHTML = ys ? pdfYilSonuHtml(sube) : pdfDonemGenelHtml(sube);
+
+  // Tarayici, sayfa basligini PDF dosya adi olarak onerir
+  const eskiBaslik = document.title;
+  document.title = ys ? `${sube.ad} Yil Sonu Durumu` : `${sube.ad} Genel Gorunum Donem ${state.donem}`;
+  const temizle = () => {
+    kok.innerHTML = "";
+    document.title = eskiBaslik;
+    window.removeEventListener("afterprint", temizle);
+  };
+  window.addEventListener("afterprint", temizle);
+  window.print();
+}
+
 function subeSayfaHtml(sube) {
   const genelAktif = state.aktifDersId === GENEL_GORUNUM;
   const ysAktif = state.aktifDersId === YIL_SONU;
@@ -1185,6 +1305,7 @@ function subeSayfaHtml(sube) {
           <button class="dt-seg-btn ${!ysAktif && state.donem === 2 ? "dt-seg-active" : ""}" data-action="donem-sec" data-donem="2">Dönem 2</button>
           <button class="dt-seg-btn ${ysAktif ? "dt-seg-active" : ""}" data-action="yil-sonu" data-sube-id="${sube.id}">📊 Yıl Sonu</button>
         </div>
+        ${(genelAktif || ysAktif) ? `<button type="button" class="dt-pdf-btn" data-action="pdf-al" data-sube-id="${sube.id}" title="Bu tabloyu PDF olarak kaydet veya yazdır">📄 PDF Çıktısı</button>` : ""}
         <span class="dt-donem-not">${ysAktif
           ? "Yıl sonu: iki dönemin ortalaması ve sınıf durumu (not girişi için bir dönem seçin)."
           : `Şu an <b>Dönem ${state.donem}</b> notlarını görüyorsunuz ve giriyorsunuz.`}</span>
@@ -1390,6 +1511,8 @@ function tiklamaDinleyicisiniBagla() {
       state.aktifDersId = GENEL_GORUNUM;
       renderMain();
       eventleriBaglaMain();
+    } else if (action === "pdf-al") {
+      pdfCiktisiAl(el.dataset.subeId);
     } else if (action === "yorum-ac") {
       const girdi = el.closest("td") && el.closest("td").querySelector(".js-ogr-ad");
       yorumModalAc(el.dataset.subeId, girdi ? girdi.value : el.dataset.ad);

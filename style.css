@@ -521,3 +521,44 @@ th.dt-group-yazili, th.dt-group-sozlu, th.dt-group-performans, th.dt-group-ortal
 .dt-yorum-yazan { width:100%; box-sizing:border-box; border:1px solid #bfb8a6; border-radius:8px; padding:9px 12px; margin-bottom:8px; font:14px Inter, sans-serif; }
 .dt-yorum-yazan.dt-yorum-hata { border-color:#a3261f; box-shadow:0 0 0 2px rgba(163,38,31,.15); }
 .dt-yorum-yazan-bilgi { color:#1B2A4A; }
+
+/* ---------- PDF ciktisi ---------- */
+.dt-pdf-btn { margin-left:auto; order:2; border:1px solid #1B2A4A; background:#fff; color:#1B2A4A; border-radius:9px; padding:8px 14px; font:600 13px Inter, sans-serif; cursor:pointer; }
+.dt-pdf-btn:hover { background:#1B2A4A; color:#fff; }
+.dt-donem-row .dt-donem-not { order:1; }
+#print-root { display:none; }
+
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  body > *:not(#print-root) { display:none !important; }
+  html, body { background:#fff !important; }
+  #print-root { display:block; font-family: Inter, "Segoe UI", Arial, sans-serif; color:#1B2A4A; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .pdf-ust { display:flex; align-items:center; gap:10px; border-bottom:2px solid #C08A2E; padding-bottom:6px; }
+  .pdf-logo { height:42px; width:auto; }
+  .pdf-okul { flex:1; }
+  .pdf-okul-hy { font-family:"Noto Serif Armenian", serif; color:#C08A2E; font-weight:700; font-size:10pt; letter-spacing:.05em; }
+  .pdf-okul-tr { font-family:"Source Serif 4", Georgia, serif; font-weight:700; font-size:11pt; letter-spacing:.04em; }
+  .pdf-tarih { font-size:9pt; color:#5b6477; }
+  .pdf-baslik { font-family:"Source Serif 4", Georgia, serif; font-size:16pt; margin:8px 0 2px; }
+  .pdf-alt { font-size:8.5pt; color:#5b6477; margin:0 0 8px; }
+  .pdf-tablo { width:100%; border-collapse:collapse; font-size:8.5pt; }
+  .pdf-tablo th { background:#1B2A4A; color:#fff; padding:4px 3px; text-align:center; font-weight:600; border:1px solid #1B2A4A; vertical-align:middle; }
+  .pdf-tablo th small { display:block; font-weight:400; font-size:7pt; opacity:.8; }
+  .pdf-tablo td { padding:3.5px 3px; text-align:center; border:1px solid #cfc9b8; }
+  .pdf-tablo td small { display:block; font-size:6.5pt; color:#7a8296; }
+  .pdf-tablo thead { display:table-header-group; }
+  .pdf-tablo tfoot { display:table-row-group; }
+  .pdf-tablo tr { break-inside:avoid; }
+  .pdf-tablo tbody tr:nth-child(even) td { background:#F6F4EE; }
+  .pdf-tablo .pdf-sira { width:6mm; color:#7a8296; }
+  .pdf-tablo th.pdf-ad, .pdf-tablo td.pdf-ad { text-align:left; padding-left:5px; white-space:nowrap; }
+  .pdf-tablo .pdf-genel { background:#FBF0D9 !important; font-weight:700; }
+  .pdf-tablo th.pdf-genel { background:#C08A2E !important; color:#fff; }
+  .pdf-tablo tfoot td { background:#EDE9DD; font-weight:700; border-top:2px solid #1B2A4A; }
+  .pdf-zayif { color:#a3261f; font-weight:700; }
+  .pdf-durum { font-weight:700; }
+  .pdf-durum-gecti { color:#1d6b3a; }
+  .pdf-durum-sorumlu { color:#8a5d0c; }
+  .pdf-durum-kaldi { color:#a3261f; }
+  .pdf-dipnot { font-size:7.5pt; color:#5b6477; margin-top:6px; }
+}
